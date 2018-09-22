@@ -95,7 +95,7 @@ newModel seed =
     , secondsLeft = 100.0
     , metersLeft = 10000.0
     , metersPerSecond = 0.0
-    , npcCars = [ newCar 0 0 9999.0 ]
+    , npcCars = [ newCar 0 0 9500.0 ]
     , previousKeys = []
     , keys = []
     , randomSeed = randomSeed
@@ -158,6 +158,7 @@ update msg model =
 framesPerSecond =
     60
 
+
 secondsPerStep =
     1000 / framesPerSecond
 
@@ -211,6 +212,7 @@ step model =
                 + 1
                 |> clamp 0 (model |> GearShift.currentGear |> gearToMetersPerSecond)
         , previousKeys = model.keys
+        , secondsLeft = model.secondsLeft - 0.016
     }
     |> addRandomCar
     |> handleCollision
@@ -223,7 +225,7 @@ handleCollision model =
                 (\npcCar ->
                     if (not npcCar.destroyed)
                         && (abs (toFloat npcCar.lane - model.currentLane) |> (\a -> a < 0.8))
-                        && abs (npcCar.metersLeft - model.metersLeft) < 10  then
+                        && (abs (npcCar.metersLeft - model.metersLeft + 385 {-hacky offset-}) < 30) then
                         ({ npcCar
                             | destroyed = True
                             , metersPerSecond = npcCar.metersPerSecond / 2
