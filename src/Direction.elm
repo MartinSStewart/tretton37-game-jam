@@ -4,8 +4,8 @@ import Point2 exposing (..)
 
 type Direction = Left | Right | Up | Down
 
-directionToPoint : Direction -> Point2 number
-directionToPoint direction =
+toPoint : Direction -> Point2 number
+toPoint direction =
     case direction of
         Left ->
             Point2 -1 0

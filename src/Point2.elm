@@ -18,3 +18,11 @@ mult pointA pointB =
 map : (number -> number2) -> Point2 number -> Point2 number2
 map mapFunc point =
     { x = mapFunc point.x, y = mapFunc point.y }
+
+mirrorY : Point2 number -> Point2 number
+mirrorY point =
+    { x = point.x, y = -point.y }
+
+mirrorX : Point2 number -> Point2 number
+mirrorX point =
+    { x = -point.x, y = point.y }
