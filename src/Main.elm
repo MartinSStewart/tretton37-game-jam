@@ -13,6 +13,7 @@ import Random
 import Set exposing (Set)
 import Svg exposing (svg)
 import Svg.Attributes exposing (x, y, width, height, viewBox)
+import Images exposing (Image)
 
 ---- MODEL ----
 
@@ -72,6 +73,12 @@ type Msg
 addCmdNone model =
     (model, Cmd.none)
 
+getMaxMetersPerSecond model =
+    currentGear model |> toFloat |> (*) 10
+
+metersPerSecondToKph =
+    3.6
+
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
@@ -84,7 +91,7 @@ update msg model =
         Step _ ->
             step model |> addCmdNone
 
-secondsPerStep = 1000 / 16
+secondsPerStep = 1000 / 60
 
 step : Model -> Model
 step model =
@@ -105,6 +112,8 @@ step model =
                 model.gearShiftIndex - 1
             else
                 model.gearShiftIndex
+        , metersPerSecond = model.metersPerSecond + 1
+            |> clamp 0 (getMaxMetersPerSecond model)
         , previousKeys = model.keys
     }
 
@@ -209,60 +218,79 @@ debugView position model =
         [ debugShow model.gearShiftIndex
         , nextGearDirection model |> Maybe.map Direction.toPoint |> debugShow
         , arrowPressed model |> Just |> debugShow
+        , model.metersPerSecond |> debugShow
         ]
 
 gameView : Model -> Html Msg
 gameView model =
-    div (style "border" "5px solid red" :: (positionAndSize Point2.zero screenSize))
+    div (style "overflow" "hidden" :: (positionAndSize Point2.zero screenSize))
         [ backgroundView Point2.zero screenSize model
+        , imageView { x = screenSize.x / 2 - (toFloat Images.playerCar.size.x) / 2, y = screenSize.y - 250 } Images.playerCar
         , viewGearShift { x = 800, y = 100 } { x = 290, y = 290 } model
         ]
 
+imageView : Point2 Float -> Image -> Html msg
+imageView position image =
+    img
+        ( src image.source :: positionAndSize position (image.size |> Point2.map toFloat) )
+        []
+
 backgroundView : Point2 Float -> Point2 Float -> Model -> Html Msg
 backgroundView position size model =
+    let
+        roadFarWidth =
+            400
+
+        roadNearWidth =
+            1000
+
+        drawLine t isDashed =
+            Svg.polyline
+                ((if isDashed then
+                    [ Svg.Attributes.strokeDasharray "100"
+                    , Svg.Attributes.strokeDashoffset (model.metersLeft |> (*) 0.01 |> String.fromFloat)
+                    ]
+                else
+                    []) ++
+                [ Svg.Attributes.stroke "white"
+                , Svg.Attributes.strokeWidth "5"
+                , svgPoints
+                    [ { x = size.x / 2 - roadFarWidth / 2 + t * roadFarWidth, y = size.y / 2 }
+                    , { x = size.x / 2 - roadNearWidth / 2 + t * roadNearWidth, y = size.y }
+                    ]
+                    |> Svg.Attributes.points
+                ])
+                []
+    in
+
     div []
-        [ div
-            ([ style "background-color" "lightblue"] ++ (positionAndSize Point2.zero { x = size.x, y = size.y / 2}))
-            []
-        , div
+        [
+        div
             ([ style "background-color" "green"] ++ (positionAndSize { x = 0, y = screenSize.y / 2} { x = screenSize.x, y = screenSize.y / 2}))
             []
         , div (positionAndSize position size)
             [ svg
                 (svgPositionAndSize Point2.zero screenSize)
                 [ Svg.polygon
-                    [ Svg.Attributes.fill "black"
+                    [ Svg.Attributes.fill "#333333FF"
                     , svgPoints
-                        [ { x = size.x / 2 - 200, y = size.y / 2 }
-                        , { x = size.x / 2 + 200, y = size.y / 2 }
-                        , { x = size.x / 2 + 500, y = size.y }
-                        , { x = size.x / 2 - 500, y = size.y }
+                        [ { x = size.x / 2 - roadFarWidth / 2, y = size.y / 2 }
+                        , { x = size.x / 2 + roadFarWidth / 2, y = size.y / 2 }
+                        , { x = size.x / 2 + roadNearWidth / 2, y = size.y }
+                        , { x = size.x / 2 - roadNearWidth / 2, y = size.y }
                         ]
                         |> Svg.Attributes.points
                     ]
                     []
-                , Svg.polyline
-                    [ Svg.Attributes.stroke "white"
-                    , Svg.Attributes.strokeWidth "5"
-                    , svgPoints
-                        [ { x = size.x / 2 + 200, y = size.y / 2 }
-                        , { x = size.x / 2 + 500, y = size.y }
-                        ]
-                        |> Svg.Attributes.points
-                    ]
-                    []
-                , Svg.polyline
-                    [ Svg.Attributes.stroke "white"
-                    , Svg.Attributes.strokeWidth "5"
-                    , svgPoints
-                        [ { x = size.x / 2 - 200, y = size.y / 2 }
-                        , { x = size.x / 2 - 500, y = size.y }
-                        ]
-                        |> Svg.Attributes.points
-                    ]
-                    []
+                , drawLine 0 False
+                , drawLine (1 / 3) True
+                , drawLine (2 / 3) True
+                , drawLine 1 False
                 ]
             ]
+        , div
+            ([ style "background-color" "lightblue"] ++ (positionAndSize Point2.zero { x = size.x, y = size.y / 2}))
+            []
         ]
 
 svgPositionAndSize position size =
@@ -340,9 +368,6 @@ moveInDirection direction length point =
 drawDirection : Point2 Float -> Float -> Direction -> Int -> Html Msg
 drawDirection position length direction stepsFromCurrentGear =
     let
-        a =
-            moveInDirection direction length Point2.zero
-
         thickness = 10.0
         length1 = length + thickness / 2
         size =
