@@ -17,6 +17,7 @@ import Time
 import KeyHelper
 import GearShift
 import Helper
+import Maybe.Extra as Maybe
 
 
 ---- MODEL ----
@@ -33,6 +34,8 @@ type alias Model =
     , npcCars : List Car
     , previousKeys : List Key
     , keys : List Key
+    , randomSeed : Random.Seed
+    , pause : Bool
     }
 
 
@@ -53,11 +56,38 @@ newCar lane metersPerSecond metersLeft =
     }
 
 
-newModel : Model
-newModel =
+addRandomCar : Model -> Model
+addRandomCar model =
+    model.randomSeed
+        |> Random.step
+            (Random.float 0 1
+                |> Random.andThen
+                    (\a ->
+                        if a < min 0.05 (0.01 * model.metersPerSecond / (gearToMetersPerSecond GearShift.maxGear)) then
+                            Random.map
+                                (\lane -> (newCar lane (model.metersPerSecond * 0.1) (model.metersLeft - roadMetersVisible)) |> Just)
+                                (Random.int 0 (laneCount - 1))
+                        else
+                            Random.constant Nothing
+                    )
+            )
+        |> (\(car, seed) ->
+            { model
+                | npcCars = Maybe.toList car ++ model.npcCars
+                , randomSeed = seed
+            })
+
+
+newModel : Int -> Model
+newModel seed =
+    let
+        randomSeed =
+            Random.initialSeed seed
+    in
+
     { targetLane = 1
     , currentLane = 1
-    , gearShiftPath = GearShift.getGearShiftPath
+    , gearShiftPath = GearShift.getGearShiftPath randomSeed
     , gearShiftIndex = 0
     , secondsLeft = 100.0
     , metersLeft = 10000.0
@@ -65,6 +95,8 @@ newModel =
     , npcCars = [ newCar 0 0 9999.0 ]
     , previousKeys = []
     , keys = []
+    , randomSeed = randomSeed
+    , pause = False
     }
 
 
@@ -82,13 +114,17 @@ addCmdNone model =
     ( model, Cmd.none )
 
 
-getMaxMetersPerSecond model =
-    GearShift.currentGear model |> toFloat |> (*) 10
+gearToMetersPerSecond gear =
+    gear + 1 |> toFloat |> logBase 1.2 |> (*) 5
 
 
 metersPerSecondToKph =
     3.6
 
+
+debugMode : Bool
+debugMode =
+    True
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
@@ -97,20 +133,37 @@ update msg model =
             model |> addCmdNone
 
         KeyMsg keyMsg ->
-            { model | keys = Keyboard.update keyMsg model.keys } |> addCmdNone
+            let
+                newKeys =
+                    Keyboard.update keyMsg model.keys
+            in
+
+            { model
+                | keys = newKeys
+                , pause =
+                    if debugMode && KeyHelper.isPressed { keys = newKeys, previousKeys = model.keys } (Keyboard.Character "p") then
+                        not model.pause
+                    else
+                        model.pause
+            }
+            |> addCmdNone
 
         Step _ ->
             step model |> addCmdNone
 
 
+framesPerSecond =
+    60
+
 secondsPerStep =
-    1000 / 60
+    1000 / framesPerSecond
 
 
 step : Model -> Model
 step model =
     { model
-        | metersLeft = model.metersLeft - secondsPerStep * model.metersPerSecond
+        | metersLeft =
+            model.metersLeft - model.metersPerSecond / secondsPerStep
         , targetLane =
             (if model.metersPerSecond <= 1 then
                 model.targetLane
@@ -143,12 +196,20 @@ step model =
 
             else
                 model.gearShiftIndex
+        , npcCars =
+            model.npcCars
+                |> List.filter
+                    (\npcCar -> npcCar.metersLeft < model.metersLeft + 20)
+                |> List.map
+                    (\npcCar -> { npcCar | metersLeft = npcCar.metersLeft - npcCar.metersPerSecond / secondsPerStep })
+
         , metersPerSecond =
             model.metersPerSecond
                 + 1
-                |> clamp 0 (getMaxMetersPerSecond model)
+                |> clamp 0 (model |> GearShift.currentGear |> gearToMetersPerSecond)
         , previousKeys = model.keys
     }
+    |> addRandomCar
 
 
 laneCount : number
@@ -170,16 +231,53 @@ view model =
 debugView : Point2 Float -> Model -> Html Msg
 debugView position model =
     div (Helper.positionAndSize position { x = 500, y = 100 })
-        [
+        [ model.npcCars |> Helper.debugShow
         ]
 
 
 gameView : Model -> Html Msg
 gameView model =
+    let
+        npcCars =
+            model.npcCars
+                |> List.sortBy (\npcCar -> npcCar.metersLeft)
+                |> List.map
+                    (\npcCar ->
+                        let
+                            distanceT =
+                                (roadMetersVisible + npcCar.metersLeft - model.metersLeft) / roadMetersVisible
+
+                            imageSizeRatio =
+                                roadFarWidth / roadNearWidth
+
+                            imageSize =
+                                Images.npcCar.size |> Point2.map (toFloat >> (*) ((1 - imageSizeRatio) * distanceT + imageSizeRatio))
+                        in
+
+                        img ([ src Images.npcCar.source ]
+                                ++ Helper.positionAndSize
+                                    (getRoadPos
+                                        model
+                                        ((toFloat npcCar.lane + 0.5) / laneCount)
+                                        distanceT
+                                        |> Point2.add (Point2.map ((*) -0.5) imageSize))
+                                    imageSize
+                            )
+                            []
+                    )
+                |> div []
+    in
+
     div (style "overflow" "hidden" :: Helper.positionAndSize Point2.zero screenSize)
         [ backgroundView Point2.zero screenSize model
-        , imageView { x = screenSize.x / 2 - toFloat Images.playerCar.size.x / 2, y = screenSize.y - 250 } Images.playerCar
+        , npcCars
+        , imageView
+            { x = screenSize.x / 2 - toFloat Images.playerCar.size.x / 2
+            , y = screenSize.y - 150
+            }
+            Images.playerCar
         , GearShift.view { x = 800, y = 100 } { x = 290, y = 290 } model
+        , speedometerView { x = 200, y = 100 } model
         ]
 
 
@@ -190,26 +288,47 @@ imageView position image =
         []
 
 
+roadFarWidth =
+    400
+
+
+roadNearWidth =
+    1000
+
+
+roadMetersVisible =
+    500
+
+
+getRoadPos : Model -> Float -> Float -> Point2 Float
+getRoadPos model tx ty =
+    let
+        offset =
+            (model.currentLane + 0.5) / laneCount
+    in
+
+    { x = ((roadNearWidth - roadFarWidth) * ty + roadFarWidth) * (tx - offset) + screenSize.x / 2
+    , y = (screenSize.y - screenSize.y / 2) * ty + screenSize.y / 2
+    }
+
+speedometerView : Point2 Float -> Model -> Html msg
+speedometerView position model =
+    div (Helper.positionAndSize position { x = 200, y = 200 })
+        [ model.metersPerSecond * metersPerSecondToKph
+            |> String.fromFloat
+            |> (\a -> a ++ "KPH")
+            |> text
+        ]
+
+
 backgroundView : Point2 Float -> Point2 Float -> Model -> Html Msg
 backgroundView position size model =
     let
-        roadFarWidth =
-            400
-
-        roadNearWidth =
-            1000
-
-        offset =
-            (model.currentLane + 0.5) / laneCount
-
-        getX tx ty =
-            ((roadNearWidth - roadFarWidth) * ty + roadFarWidth) * tx
-
         drawLine t isDashed =
             Svg.polyline
                 ((if isDashed then
                     [ Svg.Attributes.strokeDasharray "100"
-                    , Svg.Attributes.strokeDashoffset (model.metersLeft |> (*) 0.01 |> String.fromFloat)
+                    , Svg.Attributes.strokeDashoffset (model.metersLeft |> (*) 10 |> String.fromFloat)
                     ]
 
                   else
@@ -218,8 +337,8 @@ backgroundView position size model =
                     ++ [ Svg.Attributes.stroke "white"
                        , Svg.Attributes.strokeWidth "5"
                        , svgPoints
-                            [ { x = size.x / 2 + getX (t - offset) 0, y = size.y / 2 }
-                            , { x = size.x / 2 + getX (t - offset) 1, y = size.y }
+                            [ getRoadPos model t 0
+                            , getRoadPos model t 1
                             ]
                             |> Svg.Attributes.points
                        ]
@@ -236,10 +355,10 @@ backgroundView position size model =
                 [ Svg.polygon
                     [ Svg.Attributes.fill "#333333FF"
                     , svgPoints
-                        [ { x = size.x / 2 + getX -offset 0, y = size.y / 2 }
-                        , { x = size.x / 2 + getX (1 - offset) 0, y = size.y / 2 }
-                        , { x = size.x / 2 + getX (1 - offset) 1, y = size.y }
-                        , { x = size.x / 2 + getX -offset 1, y = size.y }
+                        [ getRoadPos model 0 0
+                        , getRoadPos model 1 0
+                        , getRoadPos model 1 1
+                        , getRoadPos model 0 1
                         ]
                         |> Svg.Attributes.points
                     ]
@@ -285,7 +404,10 @@ screenSize =
 subscriptions model =
     Sub.batch
         [ Sub.map KeyMsg Keyboard.subscriptions
-        , Time.every secondsPerStep Step
+        , if model.pause then
+              Sub.none
+          else
+              Time.every secondsPerStep Step
         ]
 
 
@@ -297,7 +419,7 @@ main : Program () Model Msg
 main =
     Browser.element
         { view = view
-        , init = \_ -> newModel |> addCmdNone
+        , init = \_ -> newModel 123125 |> addCmdNone
         , update = update
         , subscriptions = subscriptions
         }

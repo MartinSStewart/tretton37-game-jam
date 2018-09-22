@@ -13,6 +13,7 @@
             "elm/svg": "1.0.1",
             "elm/time": "1.0.0",
             "elm-community/list-extra": "8.0.0",
+            "elm-community/maybe-extra": "5.0.0",
             "ohanhi/keyboard": "1.0.0"
         },
         "indirect": {

@@ -18,9 +18,16 @@ type alias GearShiftState r =
     }
 
 
+maxGear =
+    25
+
+shiftsPerGear =
+    4
+
+
 currentGear : GearShiftState a -> Int
 currentGear model =
-    model.gearShiftIndex // 4
+    model.gearShiftIndex // shiftsPerGear
 
 
 moveInPath : List Direction -> Point2 Int
@@ -28,9 +35,9 @@ moveInPath path =
     List.foldl (\a b -> a |> Direction.toPoint |> Point2.add b) Point2.zero path
 
 
-getGearShiftPath : List Direction
-getGearShiftPath =
-    getGearShiftPathHelper (Random.initialSeed 123123) 100 Set.empty []
+getGearShiftPath : Random.Seed -> List Direction
+getGearShiftPath seed =
+    getGearShiftPathHelper seed (maxGear * shiftsPerGear) Set.empty []
 
 
 getGearShiftPathHelper : Random.Seed -> Int -> Set ( Int, Int ) -> List Direction -> List Direction
