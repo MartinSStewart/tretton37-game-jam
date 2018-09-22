@@ -21,6 +21,7 @@ import Maybe.Extra as Maybe
 import Ease
 import Ports
 import Json
+import Round
 
 
 ---- MODEL ----
@@ -327,6 +328,7 @@ gameView model =
     div (style "overflow" "hidden" :: Helper.positionAndSize Point2.zero screenSize)
         [ backgroundView Point2.zero screenSize model
         , npcCars
+
         , imageView
             { x = screenSize.x / 2 - toFloat Images.playerCar.size.x / 2
             , y = screenSize.y - 150
@@ -334,6 +336,13 @@ gameView model =
             Images.playerCar
         , GearShift.view { x = 800, y = 100 } { x = 290, y = 290 } model
         , speedometerView { x = 200, y = 100 } model
+        , div
+            ([ style "font-size" "30px"
+            , style "font-family" "Consolas, Arial"
+            , style "color" (if model.secondsLeft < 10 then "red" else "black")
+            ]
+                ++ (Helper.positionAndSize { x = screenSize.x / 2 - 100, y = 20 } { x = 300, y = 300 }))
+            [ "Time Left: " ++ (model.secondsLeft |> max 0 |> Round.round 2 ) |> text ]
         ]
 
 
