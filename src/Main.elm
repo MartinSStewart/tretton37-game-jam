@@ -18,6 +18,7 @@ import KeyHelper
 import GearShift
 import Helper
 import Maybe.Extra as Maybe
+import Ease
 
 
 ---- MODEL ----
@@ -199,7 +200,7 @@ step model =
         , npcCars =
             model.npcCars
                 |> List.filter
-                    (\npcCar -> npcCar.metersLeft < model.metersLeft + 20)
+                    (\npcCar -> npcCar.metersLeft < model.metersLeft + 300)
                 |> List.map
                     (\npcCar -> { npcCar | metersLeft = npcCar.metersLeft - npcCar.metersPerSecond / secondsPerStep })
 
@@ -245,7 +246,7 @@ gameView model =
                     (\npcCar ->
                         let
                             distanceT =
-                                (roadMetersVisible + npcCar.metersLeft - model.metersLeft) / roadMetersVisible
+                                (roadMetersVisible + npcCar.metersLeft - model.metersLeft) / roadMetersVisible |> (\a -> a * 1 + 0.8 |> Ease.inExpo |> (+) -0.3)
 
                             imageSizeRatio =
                                 roadFarWidth / roadNearWidth
@@ -289,7 +290,7 @@ imageView position image =
 
 
 roadFarWidth =
-    400
+    200
 
 
 roadNearWidth =
@@ -310,6 +311,7 @@ getRoadPos model tx ty =
     { x = ((roadNearWidth - roadFarWidth) * ty + roadFarWidth) * (tx - offset) + screenSize.x / 2
     , y = (screenSize.y - screenSize.y / 2) * ty + screenSize.y / 2
     }
+
 
 speedometerView : Point2 Float -> Model -> Html msg
 speedometerView position model =
