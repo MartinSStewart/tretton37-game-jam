@@ -9,6 +9,10 @@ import Keyboard exposing (Key(..))
 import Keyboard.Arrows
 import Time
 import List.Extra as List
+import Random
+import Set exposing (Set)
+import Svg exposing (svg)
+import Svg.Attributes exposing (x, y, width, height, viewBox)
 
 ---- MODEL ----
 
@@ -45,7 +49,7 @@ newCar lane metersPerSecond metersLeft =
 newModel : Model
 newModel =
     { lane = 0
-    , gearShiftPath = [ Up, Left, Down, Down, Right ]
+    , gearShiftPath = getGearShiftPath
     , gearShiftIndex = 0
     , secondsLeft = 100.0
     , metersLeft = 10000.0
@@ -54,11 +58,6 @@ newModel =
     , previousKeys = []
     , keys = []
     }
-
-
-init : ( Model, Cmd Msg )
-init =
-    ( newModel, Cmd.none )
 
 
 
@@ -123,6 +122,54 @@ laneCount : number
 laneCount =
     3
 
+randomDirection : Random.Generator Direction
+randomDirection =
+  Random.int 0 3
+    |> Random.map
+        (\a ->
+            case a of
+                0 -> Right
+                1 -> Up
+                2 -> Left
+                _ -> Down
+        )
+
+currentGear model =
+    model.gearShiftIndex // 4
+
+moveInPath : List Direction -> Point2 Int
+moveInPath path =
+    List.foldl (\a b -> a |> Direction.toPoint |> Point2.add b) Point2.zero path
+
+getGearShiftPath : List Direction
+getGearShiftPath =
+    getGearShiftPathHelper (Random.initialSeed 123123) 100 Set.empty []
+
+getGearShiftPathHelper : Random.Seed -> Int -> Set (Int, Int) -> List Direction -> List Direction
+getGearShiftPathHelper seed stepsLeft set path =
+    let
+        (direction, seed1) =
+            Random.step randomDirection seed
+
+        position = moveInPath (direction :: path) |> (\a -> (a.x, a.y))
+
+        direction1 =
+            if Set.member position set then
+                Right
+            else
+                direction
+    in
+        if stepsLeft == 0 then
+            path
+        else
+            getGearShiftPathHelper
+                seed1
+                (stepsLeft - 1)
+                (Set.insert position set)
+                (direction1 :: path)
+
+
+
 isKeyPressed : Model -> Key -> Bool
 isKeyPressed model key =
     List.any ((==) key) model.keys && (List.any ((==) key) model.previousKeys |> not)
@@ -152,15 +199,91 @@ arrowPressed model =
 view : Model -> Html Msg
 view model =
     div []
-        [ img [ src "/logo.svg" ] []
-        , h1 [] [ text "Your Elm Apps working!" ]
-        , viewGearShift { x = 200, y = 200 } { x = 200, y = 200 } model
-        --, model.pressedKeys |> Debug.toString |> text
-        --, arrowPressed model |> debugShow
-        , debugShow model.gearShiftIndex
+        [ gameView model
+        , debugView { x = 0, y = 730 } model
+        ]
+
+debugView : Point2 Float -> Model -> Html Msg
+debugView position model =
+    div (positionAndSize position { x = 500, y = 100 })
+        [ debugShow model.gearShiftIndex
         , nextGearDirection model |> Maybe.map Direction.toPoint |> debugShow
         , arrowPressed model |> Just |> debugShow
         ]
+
+gameView : Model -> Html Msg
+gameView model =
+    div (style "border" "5px solid red" :: (positionAndSize Point2.zero screenSize))
+        [ backgroundView Point2.zero screenSize model
+        , viewGearShift { x = 800, y = 100 } { x = 290, y = 290 } model
+        ]
+
+backgroundView : Point2 Float -> Point2 Float -> Model -> Html Msg
+backgroundView position size model =
+    div []
+        [ div
+            ([ style "background-color" "lightblue"] ++ (positionAndSize Point2.zero { x = size.x, y = size.y / 2}))
+            []
+        , div
+            ([ style "background-color" "green"] ++ (positionAndSize { x = 0, y = screenSize.y / 2} { x = screenSize.x, y = screenSize.y / 2}))
+            []
+        , div (positionAndSize position size)
+            [ svg
+                (svgPositionAndSize Point2.zero screenSize)
+                [ Svg.polygon
+                    [ Svg.Attributes.fill "black"
+                    , svgPoints
+                        [ { x = size.x / 2 - 200, y = size.y / 2 }
+                        , { x = size.x / 2 + 200, y = size.y / 2 }
+                        , { x = size.x / 2 + 500, y = size.y }
+                        , { x = size.x / 2 - 500, y = size.y }
+                        ]
+                        |> Svg.Attributes.points
+                    ]
+                    []
+                , Svg.polyline
+                    [ Svg.Attributes.stroke "white"
+                    , Svg.Attributes.strokeWidth "5"
+                    , svgPoints
+                        [ { x = size.x / 2 + 200, y = size.y / 2 }
+                        , { x = size.x / 2 + 500, y = size.y }
+                        ]
+                        |> Svg.Attributes.points
+                    ]
+                    []
+                , Svg.polyline
+                    [ Svg.Attributes.stroke "white"
+                    , Svg.Attributes.strokeWidth "5"
+                    , svgPoints
+                        [ { x = size.x / 2 - 200, y = size.y / 2 }
+                        , { x = size.x / 2 - 500, y = size.y }
+                        ]
+                        |> Svg.Attributes.points
+                    ]
+                    []
+                ]
+            ]
+        ]
+
+svgPositionAndSize position size =
+    [ String.fromInt position.x |> x
+    , String.fromInt position.x |> y
+    , String.fromInt size.x |> width
+    , String.fromInt size.y |> height
+    , [ position.y, position.y, size.x, size.y ]
+        |> List.map String.fromInt
+        |> String.join " "
+        |> viewBox
+    ]
+
+svgPoints : List (Point2 Float) -> String
+svgPoints points =
+    points
+        |> List.map (\a -> (String.fromFloat a.x) ++ "," ++ (String.fromFloat a.y))
+        |> String.join " "
+
+screenSize =
+    Point2 1280 720
 
 debugShow : a -> Html msg
 debugShow =
@@ -169,26 +292,34 @@ debugShow =
 viewGearShift : Point2 Float -> Point2 Float -> Model -> Html Msg
 viewGearShift position size model =
     let
-        forwardPath =
+        getPath path index incrementBy =
             List.foldl
-                (\direction (html, position1) -> (drawDirection position1 50 direction :: html, moveDirection direction 50 position1 ))
-                ([], Point2.zero)
-                (model.gearShiftPath |> List.drop model.gearShiftIndex)
-                |> (\(html, _) -> html)
+                (\direction (html, position1, index1) ->
+                    (drawDirection (Point2.add position1 (Point2.map ((*) 0.5) size)) 50 direction index1 :: html
+                    , moveInDirection direction 50 position1
+                    , index1 + incrementBy
+                    )
+                )
+                ([], Point2.zero, index)
+                path
+                |> (\(html, _, _) -> html)
+
+        forwardPath =
+            getPath (model.gearShiftPath |> List.drop model.gearShiftIndex) 0 1
 
         reversePath =
-            List.foldl
-                (\direction (html, position1) -> (drawDirection position1 50 direction :: html, moveDirection direction 50 position1 ))
-                ([], Point2.zero)
+            getPath
                 (model.gearShiftPath
                     |> List.take model.gearShiftIndex
                     |> List.reverse
-                    |> List.map Direction.reverse)
-                |> (\(html, _) -> html)
+                    |> List.map Direction.reverse
+                )
+                -1
+                -1
     in
 
-    div (positionAndSize position size)
-        (forwardPath ++ reversePath)
+    div (style "overflow" "hidden" :: positionAndSize position size)
+        (reversePath ++ forwardPath)
 
 positionAndSize : Point2 Float -> Point2 Float -> List (Html.Attribute msg)
 positionAndSize position size =
@@ -199,17 +330,18 @@ positionAndSize position size =
     , style "height" (px size.y)
     ]
 
-moveDirection : Direction -> number -> Point2 number -> Point2 number
-moveDirection direction length point =
+
+moveInDirection : Direction -> number -> Point2 number -> Point2 number
+moveInDirection direction length point =
     Direction.toPoint direction
         |> Point2.map ((*) length)
         |> Point2.add point
 
-drawDirection : Point2 Float -> Float -> Direction -> Html Msg
-drawDirection position length direction =
+drawDirection : Point2 Float -> Float -> Direction -> Int -> Html Msg
+drawDirection position length direction stepsFromCurrentGear =
     let
         a =
-            moveDirection direction length Point2.zero
+            moveInDirection direction length Point2.zero
 
         thickness = 10.0
         length1 = length + thickness / 2
@@ -235,8 +367,20 @@ drawDirection position length direction =
                 Down ->
                     { x = -thickness / 2, y = 0 })
                 |> Point2.add position
+
+        color =
+            if stepsFromCurrentGear < 0 then
+                "#AA0000FF"
+            else if stepsFromCurrentGear == 0 then
+                "#000000FF"
+            else if stepsFromCurrentGear == 1 then
+                "#666666FF"
+            else if stepsFromCurrentGear == 2 then
+                "#999999FF"
+            else
+                "#AAAAAAFF"
     in
-    div ([ style "background-color" "black" ] ++ (positionAndSize position1 size))
+    div ([ style "background-color" color ] ++ (positionAndSize position1 size))
         []
 
 px : Float -> String
@@ -259,7 +403,7 @@ main : Program () Model Msg
 main =
     Browser.element
         { view = view
-        , init = \_ -> init
+        , init = \_ -> newModel |> addCmdNone
         , update = update
         , subscriptions = subscriptions
         }
