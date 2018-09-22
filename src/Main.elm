@@ -1,4 +1,4 @@
-module Main exposing (..)
+port module Main exposing (..)
 
 import Browser
 import Direction exposing (Direction(..))
@@ -19,6 +19,8 @@ import GearShift
 import Helper
 import Maybe.Extra as Maybe
 import Ease
+import Ports
+import Json
 
 
 ---- MODEL ----
@@ -150,7 +152,7 @@ update msg model =
             |> addCmdNone
 
         Step _ ->
-            step model |> addCmdNone
+            step model
 
 
 framesPerSecond =
@@ -160,7 +162,7 @@ secondsPerStep =
     1000 / framesPerSecond
 
 
-step : Model -> Model
+step : Model -> (Model, Cmd Msg)
 step model =
     { model
         | metersLeft =
@@ -200,7 +202,7 @@ step model =
         , npcCars =
             model.npcCars
                 |> List.filter
-                    (\npcCar -> npcCar.metersLeft < model.metersLeft + 300)
+                    (\npcCar -> npcCar.metersLeft < model.metersLeft + 300 && npcCar.metersLeft > model.metersLeft - roadMetersVisible - 50)
                 |> List.map
                     (\npcCar -> { npcCar | metersLeft = npcCar.metersLeft - npcCar.metersPerSecond / secondsPerStep })
 
@@ -211,6 +213,57 @@ step model =
         , previousKeys = model.keys
     }
     |> addRandomCar
+    |> handleCollision
+
+handleCollision : Model -> (Model, Cmd Msg)
+handleCollision model =
+    let
+        npcCarTuples =
+            List.map
+                (\npcCar ->
+                    if (not npcCar.destroyed)
+                        && (abs (toFloat npcCar.lane - model.currentLane) |> (\a -> a < 0.8))
+                        && abs (npcCar.metersLeft - model.metersLeft) < 10  then
+                        ({ npcCar
+                            | destroyed = True
+                            , metersPerSecond = npcCar.metersPerSecond / 2
+                         }
+                        , True
+                        )
+                    else
+                        (npcCar, False)
+                )
+                model.npcCars
+
+        hasCollided =
+            List.any (\(_, collided) -> collided) npcCarTuples
+    in
+
+    ({ model
+        | npcCars = npcCarTuples |> List.map (\(npcCar, _) -> npcCar)
+        , gearShiftIndex =
+            if hasCollided then
+                model.gearShiftIndex // 2 |> max GearShift.shiftsPerGear
+            else
+                model.gearShiftIndex
+        , metersPerSecond =
+            if hasCollided then
+                model.metersPerSecond / 2
+            else
+                model.metersPerSecond
+    }
+    , if hasCollided then
+        playSound "collision.ogg"
+    else
+        Cmd.none
+    )
+
+
+playSound : String -> Cmd msg
+playSound soundName =
+    Ports.PlaySound { soundName = soundName, loop = False }
+        |> Json.encodePortOutMsg
+        |> Ports.portOut
 
 
 laneCount : number
