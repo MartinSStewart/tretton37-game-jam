@@ -1,8 +1,14 @@
-module Direction exposing (..)
+module Direction exposing (Direction(..), reverse, toPoint)
 
 import Point2 exposing (..)
 
-type Direction = Left | Right | Up | Down
+
+type Direction
+    = Left
+    | Right
+    | Up
+    | Down
+
 
 toPoint : Direction -> Point2 number
 toPoint direction =
@@ -18,6 +24,7 @@ toPoint direction =
 
         Down ->
             Point2 0 1
+
 
 reverse : Direction -> Direction
 reverse direction =

@@ -1,7 +1,7 @@
-module Images exposing (..)
-
+module Images exposing (Image, playerCar)
 
 import Point2 exposing (..)
+
 
 type alias Image =
     { source : String
