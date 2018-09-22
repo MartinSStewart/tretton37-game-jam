@@ -1,44 +1,4 @@
-module Main exposing
-    ( Car
-    , Model
-    , Msg(..)
-    , addCmdNone
-    , arrowPressed
-    , backgroundView
-    , currentGear
-    , debugShow
-    , debugView
-    , drawDirection
-    , gameView
-    , getGearShiftPath
-    , getGearShiftPathHelper
-    , getMaxMetersPerSecond
-    , imageView
-    , isKeyDown
-    , isKeyPressed
-    , isKeyReleased
-    , laneCount
-    , main
-    , metersPerSecondToKph
-    , moveInDirection
-    , moveInPath
-    , newCar
-    , newModel
-    , nextGearDirection
-    , positionAndSize
-    , previousGearDirection
-    , px
-    , randomDirection
-    , screenSize
-    , secondsPerStep
-    , step
-    , subscriptions
-    , svgPoints
-    , svgPositionAndSize
-    , update
-    , view
-    , viewGearShift
-    )
+module Main exposing (..)
 
 import Browser
 import Direction exposing (Direction(..))
@@ -54,14 +14,15 @@ import Set exposing (Set)
 import Svg exposing (svg)
 import Svg.Attributes exposing (height, viewBox, width, x, y)
 import Time
-
+import KeyHelper
 
 
 ---- MODEL ----
 
 
 type alias Model =
-    { lane : Int
+    { targetLane : Int
+    , currentLane : Float
     , gearShiftPath : List Direction
     , gearShiftIndex : Int
     , secondsLeft : Float
@@ -92,7 +53,8 @@ newCar lane metersPerSecond metersLeft =
 
 newModel : Model
 newModel =
-    { lane = 0
+    { targetLane = 1
+    , currentLane = 1
     , gearShiftPath = getGearShiftPath
     , gearShiftIndex = 0
     , secondsLeft = 100.0
@@ -147,22 +109,34 @@ step : Model -> Model
 step model =
     { model
         | metersLeft = model.metersLeft - secondsPerStep * model.metersPerSecond
-        , lane =
-            (if isKeyPressed model (Keyboard.Character "A") then
-                model.lane - 1
+        , targetLane =
+            (if model.metersPerSecond <= 1 then
+                model.targetLane
+            else if KeyHelper.isPressed model (Keyboard.Character "a") || KeyHelper.isDown model (Keyboard.Character "A") then
+                model.targetLane - 1
 
-             else if isKeyPressed model (Keyboard.Character "D") then
-                model.lane + 1
+             else if KeyHelper.isPressed model (Keyboard.Character "d") || KeyHelper.isPressed model (Keyboard.Character "D") then
+                model.targetLane + 1
 
              else
-                model.lane
+                model.targetLane
             )
                 |> clamp 0 (laneCount - 1)
+        , currentLane =
+            let
+                targetLane1 =
+                    toFloat model.targetLane
+            in
+
+            if targetLane1 < model.currentLane then
+                max targetLane1 (model.currentLane - min 0.3 (0.01 * model.metersPerSecond))
+            else
+                min targetLane1 (model.currentLane + min 0.3 (0.01 * model.metersPerSecond))
         , gearShiftIndex =
-            if (arrowPressed model |> Just) == (nextGearDirection model |> Maybe.map Direction.toPoint) then
+            if (KeyHelper.arrowPressed model |> Just) == (nextGearDirection model |> Maybe.map Direction.toPoint) then
                 model.gearShiftIndex + 1
 
-            else if (arrowPressed model |> Just) == (previousGearDirection model |> Maybe.map Direction.toPoint) then
+            else if (KeyHelper.arrowPressed model |> Just) == (previousGearDirection model |> Maybe.map Direction.toPoint) then
                 model.gearShiftIndex - 1
 
             else
@@ -192,26 +166,7 @@ laneCount =
     3
 
 
-randomDirection : Random.Generator Direction
-randomDirection =
-    Random.int 0 3
-        |> Random.map
-            (\a ->
-                case a of
-                    0 ->
-                        Right
-
-                    1 ->
-                        Up
-
-                    2 ->
-                        Left
-
-                    _ ->
-                        Down
-            )
-
-
+currentGear : Model -> Int
 currentGear model =
     model.gearShiftIndex // 4
 
@@ -230,7 +185,7 @@ getGearShiftPathHelper : Random.Seed -> Int -> Set ( Int, Int ) -> List Directio
 getGearShiftPathHelper seed stepsLeft set path =
     let
         ( direction, seed1 ) =
-            Random.step randomDirection seed
+            Random.step Direction.random seed
 
         position =
             moveInPath (direction :: path) |> (\a -> ( a.x, a.y ))
@@ -253,33 +208,6 @@ getGearShiftPathHelper seed stepsLeft set path =
             (direction1 :: path)
 
 
-isKeyPressed : Model -> Key -> Bool
-isKeyPressed model key =
-    List.any ((==) key) model.keys && (List.any ((==) key) model.previousKeys |> not)
-
-
-isKeyDown : Model -> Key -> Bool
-isKeyDown model key =
-    List.any ((==) key) model.keys
-
-
-isKeyReleased : Model -> Key -> Bool
-isKeyReleased model key =
-    List.any ((==) key) model.previousKeys
-
-
-arrowPressed : Model -> Point2 Int
-arrowPressed model =
-    (if Keyboard.Arrows.arrows model.keys == Keyboard.Arrows.arrows model.previousKeys then
-        Point2.zero
-
-     else
-        Keyboard.Arrows.arrows model.keys
-    )
-        |> Point2.mirrorY
-
-
-
 ---- VIEW ----
 
 
@@ -294,10 +222,7 @@ view model =
 debugView : Point2 Float -> Model -> Html Msg
 debugView position model =
     div (positionAndSize position { x = 500, y = 100 })
-        [ debugShow model.gearShiftIndex
-        , nextGearDirection model |> Maybe.map Direction.toPoint |> debugShow
-        , arrowPressed model |> Just |> debugShow
-        , model.metersPerSecond |> debugShow
+        [
         ]
 
 
@@ -326,6 +251,12 @@ backgroundView position size model =
         roadNearWidth =
             1000
 
+        offset =
+            (model.currentLane + 0.5) / laneCount
+
+        getX tx ty =
+            ((roadNearWidth - roadFarWidth) * ty + roadFarWidth) * tx
+
         drawLine t isDashed =
             Svg.polyline
                 ((if isDashed then
@@ -339,8 +270,8 @@ backgroundView position size model =
                     ++ [ Svg.Attributes.stroke "white"
                        , Svg.Attributes.strokeWidth "5"
                        , svgPoints
-                            [ { x = size.x / 2 - roadFarWidth / 2 + t * roadFarWidth, y = size.y / 2 }
-                            , { x = size.x / 2 - roadNearWidth / 2 + t * roadNearWidth, y = size.y }
+                            [ { x = size.x / 2 + getX (t - offset) 0, y = size.y / 2 }
+                            , { x = size.x / 2 + getX (t - offset) 1, y = size.y }
                             ]
                             |> Svg.Attributes.points
                        ]
@@ -357,10 +288,10 @@ backgroundView position size model =
                 [ Svg.polygon
                     [ Svg.Attributes.fill "#333333FF"
                     , svgPoints
-                        [ { x = size.x / 2 - roadFarWidth / 2, y = size.y / 2 }
-                        , { x = size.x / 2 + roadFarWidth / 2, y = size.y / 2 }
-                        , { x = size.x / 2 + roadNearWidth / 2, y = size.y }
-                        , { x = size.x / 2 - roadNearWidth / 2, y = size.y }
+                        [ { x = size.x / 2 + getX -offset 0, y = size.y / 2 }
+                        , { x = size.x / 2 + getX (1 - offset) 0, y = size.y / 2 }
+                        , { x = size.x / 2 + getX (1 - offset) 1, y = size.y }
+                        , { x = size.x / 2 + getX -offset 1, y = size.y }
                         ]
                         |> Svg.Attributes.points
                     ]
@@ -408,6 +339,13 @@ debugShow =
 viewGearShift : Point2 Float -> Point2 Float -> Model -> Html Msg
 viewGearShift position size model =
     let
+        gearUpText =
+            if currentGear model == 0 then
+                div ([ style "font-size" "50px", style "font-family" "Consolas, Arial" ] ++ positionAndSize { x = -350, y = 100 } { x = 450, y = 30 })
+                    [ text "Car idle, gear up! →" ]
+            else
+                div [] []
+
         getPath path index incrementBy =
             List.foldl
                 (\direction ( html, position1, index1 ) ->
@@ -433,8 +371,11 @@ viewGearShift position size model =
                 -1
                 -1
     in
-    div (style "overflow" "hidden" :: positionAndSize position size)
-        (reversePath ++ forwardPath)
+    div (positionAndSize position size)
+        [ gearUpText
+        , div (style "overflow" "hidden" :: positionAndSize Point2.zero size)
+            (reversePath ++ forwardPath)
+        ]
 
 
 positionAndSize : Point2 Float -> Point2 Float -> List (Html.Attribute msg)

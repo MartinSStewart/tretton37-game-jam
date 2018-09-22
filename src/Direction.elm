@@ -1,6 +1,7 @@
-module Direction exposing (Direction(..), reverse, toPoint)
+module Direction exposing (..)
 
 import Point2 exposing (..)
+import Random
 
 
 type Direction
@@ -40,3 +41,22 @@ reverse direction =
 
         Down ->
             Up
+
+random : Random.Generator Direction
+random =
+    Random.int 0 3
+        |> Random.map
+            (\a ->
+                case a of
+                    0 ->
+                        Right
+
+                    1 ->
+                        Up
+
+                    2 ->
+                        Left
+
+                    _ ->
+                        Down
+            )
