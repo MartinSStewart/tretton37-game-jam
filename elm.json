@@ -3,6 +3,7 @@
     "source-directories": [
         "src"
     ],
+    "homepage": "https://martinsstewart.github.io/tretton37-game-jam/",
     "elm-version": "0.19.0",
     "dependencies": {
         "direct": {

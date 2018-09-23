@@ -372,7 +372,7 @@ view model =
 debugView : Point2 Float -> Model -> Html Msg
 debugView position model =
     div (Helper.positionAndSize position { x = 500, y = 100 })
-        [ 
+        [
         ]
 
 
@@ -616,7 +616,7 @@ main : Program () Model Msg
 main =
     Browser.element
         { view = view
-        , init = \_ -> newModel 123124 |> addCmdNone
+        , init = \_ -> newModel 123121 |> addCmdNone
         , update = update
         , subscriptions = subscriptions
         }
