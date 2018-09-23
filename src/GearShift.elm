@@ -64,53 +64,6 @@ getGearShiftPathHelper seedRandom path =
             getGearShiftPathHelper seedRandom1 (List.drop 1 path)
         else
             getGearShiftPathHelper seedRandom1 (nextDirection :: path)
-        -- if List.empty branches then
-        --     getGearShiftPathHelper
-        --         seedRandom
-        --         availableDirections
-        --         (List.drop 1 path)
-        --         (List.head path |> Maybe.withDefault Left |> Direction.turnLeft)
-        -- else
-
-
-
--- getGearShiftPathHelper : Random.Seed -> Int -> Set ( Int, Int ) -> List Direction -> Maybe (List Direction)
--- getGearShiftPathHelper seed stepsLeft set path =
---     let
---         ( direction, seed1 ) =
---             Random.step Direction.random seed
---
---         position =
---             moveInPath (direction :: path) |> (\a -> ( a.x, a.y ))
---
---         direction1 =
---             if Set.insert position set then
---                 Right
---
---             else
---                 direction
---
---         next =
---             getGearShiftPathHelper
---                 seed1
---                 (stepsLeft - 1)
---                 (Set.insert position set)
---                 (direction1 :: path)
---     in
---     if stepsLeft == 0 then
---         Just path
---     else
---         case next of
---             Just a ->
---
---             Nothing ->
---                 getGearShiftPathHelper
---                     seed1
---                     (stepsLeft - 1)
---                     (Set.insert position set)
---                     (direction1 :: path)
-
-
 
 
 nextGearDirection : GearShiftState a -> Maybe Direction
@@ -130,16 +83,37 @@ view position size model =
     let
         gearUpText =
             if currentGear model == 0 then
-                div ([ style "font-size" "50px", style "font-family" "Consolas, Arial" ] ++ Helper.positionAndSize { x = -350, y = 70 } { x = 450, y = 30 })
+                div ([ style "font-size" "50px", style "font-family" "Consolas, Arial" ]
+                        ++ Helper.positionAndSize
+                            { x = -350, y = 55 }
+                            { x = 450, y = 30 }
+                    )
                     [ text "Car idle, gear up with arrow keys! →" ]
             else
                 div [] []
 
-        getPath path index incrementBy =
+        shiftLength = 100
+
+        centerPoint =
+            Point2.map ((*) 0.5) size
+
+        getPath path index incrementBy drawGear =
             List.foldl
                 (\direction ( html, position1, index1 ) ->
-                    ( drawDirection (Point2.add position1 (Point2.map ((*) 0.5) size)) 50 direction index1 :: html
-                    , moveInDirection direction 50 position1
+                    (   if drawGear then
+                            let
+                                gearIndex =
+                                    (model.gearShiftIndex + index1) // shiftsPerGear
+                            in
+
+                            if modBy shiftsPerGear (model.gearShiftIndex + index1) == 0 then
+                                drawGearNumber (Point2.add position1 centerPoint) shiftLength direction index1 gearIndex :: html
+                            else
+                                html
+
+                        else
+                            drawDirection (Point2.add position1 centerPoint) shiftLength direction index1 :: html
+                    , moveInDirection direction shiftLength position1
                     , index1 + incrementBy
                     )
                 )
@@ -148,7 +122,7 @@ view position size model =
                 |> (\( html, _, _ ) -> html)
 
         forwardPath =
-            getPath (model.gearShiftPath |> List.drop model.gearShiftIndex) 0 1
+            getPath (model.gearShiftPath |> List.drop model.gearShiftIndex) 0 1 False
 
         reversePath =
             getPath
@@ -159,11 +133,27 @@ view position size model =
                 )
                 -1
                 -1
+                False
+
+        forwardGearNumbers =
+            getPath (model.gearShiftPath |> List.drop model.gearShiftIndex) 0 1 True
+
+        reverseGearNumbers =
+            getPath
+                (model.gearShiftPath
+                    |> List.take model.gearShiftIndex
+                    |> List.reverse
+                    |> List.map Direction.reverse
+                )
+                -1
+                -1
+                True
     in
     div (Helper.positionAndSize position size)
-        [ gearUpText
-        , div (style "overflow" "hidden" :: Helper.positionAndSize Point2.zero size)
-            (reversePath ++ forwardPath)
+        [ div (style "overflow" "hidden" :: Helper.positionAndSize Point2.zero size)
+            (reversePath ++ forwardPath ++ forwardGearNumbers)
+        , Helper.imageView { x = 135, y = 19} Images.stickShift
+        , gearUpText
         ]
 
 
@@ -171,7 +161,7 @@ drawDirection : Point2 Float -> Float -> Direction -> Int -> Html msg
 drawDirection position length direction stepsFromCurrentGear =
     let
         thickness =
-            10.0
+            20.0
 
         length1 =
             length + thickness / 2
@@ -207,23 +197,67 @@ drawDirection position length direction stepsFromCurrentGear =
                 |> Point2.add position
 
         color =
-            if stepsFromCurrentGear < 0 then
-                "#AA0000FF"
-
-            else if stepsFromCurrentGear == 0 then
-                "#000000FF"
-
-            else if stepsFromCurrentGear == 1 then
-                "#666666FF"
-
-            else if stepsFromCurrentGear == 2 then
-                "#999999FF"
-
-            else
-                "#AAAAAAFF"
+            "#333333FF"
     in
-    div ([ style "background-color" color ] ++ Helper.positionAndSize position1 size)
+    div
         []
+        [ div
+            ([ style "background-color" color ] ++ Helper.positionAndSize position1 size)
+            []
+        ,   if stepsFromCurrentGear == 0 then
+                div
+                    ([ style "background-color" "green" ] ++ Helper.positionAndSize position1 size)
+                    []
+            else
+                div [] []
+        ]
+
+
+drawGearNumber : Point2 Float -> Float -> Direction -> Int -> Int -> Html msg
+drawGearNumber position length direction stepsFromCurrentGear gearIndex =
+    let
+        thickness =
+            20.0
+
+        length1 =
+            length + thickness / 2
+
+        size =
+            case direction of
+                Left ->
+                    { x = length1, y = thickness }
+
+                Right ->
+                    { x = length1, y = thickness }
+
+                Up ->
+                    { x = thickness, y = length1 }
+
+                Down ->
+                    { x = thickness, y = length1 }
+
+        position1 =
+            (case direction of
+                Left ->
+                    { x = -length1, y = -thickness / 2 }
+
+                Right ->
+                    { x = 0, y = -thickness / 2 }
+
+                Up ->
+                    { x = -thickness / 2, y = -length1 }
+
+                Down ->
+                    { x = -thickness / 2, y = 0 }
+            )
+                |> Point2.add position
+
+        color =
+            "#333333FF"
+    in
+    div
+        ([ style "color" "white" ] ++ Helper.positionAndSize (Point2.add position { x = -4, y = -6 }) size)
+        [ gearIndex |> String.fromInt |> text]
 
 
 moveInDirection : Direction -> number -> Point2 number -> Point2 number

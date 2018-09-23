@@ -3,6 +3,7 @@ module Helper exposing (..)
 import Point2 exposing (Point2)
 import Html exposing (Html, div, h1, img, text)
 import Html.Attributes exposing (src, style)
+import Images exposing (Image)
 
 
 debugShow : a -> Html msg
@@ -23,3 +24,10 @@ positionAndSize position size =
     , style "width" (px size.x)
     , style "height" (px size.y)
     ]
+
+
+imageView : Point2 Float -> Image -> Html msg
+imageView position image =
+    img
+        (src image.source :: positionAndSize position (image.size |> Point2.map toFloat))
+        []

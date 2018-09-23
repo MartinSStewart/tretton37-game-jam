@@ -20,3 +20,9 @@ npcCar =
     { source = "npc_car.png"
     , size = { x = 342, y = 260 }
     }
+
+stickShift : Image
+stickShift =
+    { source = "stick_shift.png"
+    , size = { x = 130, y = 140 }
+    }

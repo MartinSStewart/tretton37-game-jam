@@ -395,7 +395,7 @@ gameView model =
         [ backgroundView Point2.zero screenSize model
         , npcCars
 
-        , imageView
+        , Helper.imageView
             { x = screenSize.x / 2 - toFloat Images.playerCar.size.x / 2
             , y = screenSize.y - 150
             }
@@ -408,6 +408,15 @@ gameView model =
             ]
                 ++ (Helper.positionAndSize { x = screenSize.x / 2 - 200, y = 20 } { x = 400, y = 300 }))
             [ "Time Left: " ++ (model.secondsLeft |> max 0 |> Round.round 2 ) |> text ]
+
+        ,   if model.started then
+                div [] []
+            else
+                div
+                    ([ style "color" "white", style "font-size" "50px", style "text-align" "center" ]
+                        ++ (Helper.positionAndSize { x = screenSize.x / 2 - 300, y = 640 } { x = 600, y = 300 }))
+                    [ text "← Steer with A and D →" ]
+
         , if model.secondsLeft <= 0 && model.metersPerSecond <= 0 then
             div
                 ([ style "text-align" "center", style "font-size" "50px", style "background-color" "#FFFFFFAA" ]
@@ -425,11 +434,6 @@ gameView model =
         ]
 
 
-imageView : Point2 Float -> Image -> Html msg
-imageView position image =
-    img
-        (src image.source :: Helper.positionAndSize position (image.size |> Point2.map toFloat))
-        []
 
 
 roadFarWidth =
@@ -467,6 +471,11 @@ speedometerView position model =
         , -model.metersLeft / 1000
             |> Round.round 2
             |> (\a -> "Distance: " ++ a)
+            |> text
+        , Html.br [] []
+        , GearShift.currentGear model
+            |> String.fromInt
+            |> (\a -> "Gear: " ++ a)
             |> text
         ]
 
