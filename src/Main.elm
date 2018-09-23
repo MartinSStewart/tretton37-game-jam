@@ -4,6 +4,7 @@ import Browser
 import Direction exposing (Direction(..))
 import Html exposing (Html, div, h1, img, text)
 import Html.Attributes exposing (src, style)
+import Html.Events exposing (onClick)
 import Images exposing (Image)
 import Keyboard exposing (Key(..))
 import Keyboard.Arrows
@@ -40,6 +41,7 @@ type alias Model =
     , keys : List Key
     , randomSeed : Random.Seed
     , pause : Bool
+    , started : Bool
     }
 
 
@@ -93,14 +95,15 @@ newModel seed =
     , currentLane = 1
     , gearShiftPath = GearShift.getGearShiftPath randomSeed
     , gearShiftIndex = 0
-    , secondsLeft = 100.0
-    , metersLeft = 10000.0
+    , secondsLeft = startingSecondsLeft
+    , metersLeft = 0.0
     , metersPerSecond = 0.0
-    , npcCars = [ newCar 0 0 9500.0 ]
+    , npcCars = []
     , previousKeys = []
     , keys = []
     , randomSeed = randomSeed
     , pause = False
+    , started = False
     }
 
 
@@ -112,6 +115,7 @@ type Msg
     = NoOp
     | KeyMsg Keyboard.Msg
     | Step Time.Posix
+    | NewGame
 
 
 addCmdNone model =
@@ -119,11 +123,15 @@ addCmdNone model =
 
 
 gearToMetersPerSecond gear =
-    gear + 1 |> toFloat |> logBase 1.2 |> (*) 5
+    gear + 1 |> toFloat |> logBase 1.2 |> (*) 3
 
 
 metersPerSecondToKph =
     3.6
+
+
+startingSecondsLeft =
+    10
 
 
 debugMode : Bool
@@ -155,6 +163,9 @@ update msg model =
         Step _ ->
             step model
 
+        NewGame ->
+            newModel (Random.step (Random.int 0 100000) model.randomSeed |> Tuple.first) |> addCmdNone
+
 
 framesPerSecond =
     60
@@ -162,6 +173,11 @@ framesPerSecond =
 
 secondsPerStep =
     1000 / framesPerSecond
+
+
+-- nextCheckpoint : Float -> Float
+-- nextCheckpoint metersLeft =
+--     metersLeft
 
 
 step : Model -> (Model, Cmd Msg)
@@ -193,7 +209,9 @@ step model =
             else
                 min targetLane1 (model.currentLane + min 0.3 (0.01 * model.metersPerSecond))
         , gearShiftIndex =
-            if (KeyHelper.arrowPressed model |> Just) == (GearShift.nextGearDirection model |> Maybe.map Direction.toPoint) then
+            if model.secondsLeft <= 0 then
+                model.gearShiftIndex
+            else if (KeyHelper.arrowPressed model |> Just) == (GearShift.nextGearDirection model |> Maybe.map Direction.toPoint) then
                 model.gearShiftIndex + 1
 
             else if (KeyHelper.arrowPressed model |> Just) == (GearShift.previousGearDirection model |> Maybe.map Direction.toPoint) then
@@ -201,6 +219,11 @@ step model =
 
             else
                 model.gearShiftIndex
+        , started =
+            if GearShift.currentGear model > 0 then
+                True
+            else
+                model.started
         , npcCars =
             model.npcCars
                 |> List.filter
@@ -209,14 +232,31 @@ step model =
                     (\npcCar -> { npcCar | metersLeft = npcCar.metersLeft - npcCar.metersPerSecond / secondsPerStep })
 
         , metersPerSecond =
-            model.metersPerSecond
-                + 1
-                |> clamp 0 (model |> GearShift.currentGear |> gearToMetersPerSecond)
+            (if model.secondsLeft <= 0 then
+                model.metersPerSecond - 0.1 - model.metersPerSecond * 0.01
+            else
+                model.metersPerSecond + 0.1)
+            |> clamp 0 (model |> GearShift.currentGear |> gearToMetersPerSecond)
         , previousKeys = model.keys
-        , secondsLeft = model.secondsLeft - 0.016
+        , secondsLeft =
+            if model.started then
+                model.secondsLeft - 0.016
+            else
+                startingSecondsLeft
     }
     |> addRandomCar
     |> handleCollision
+    |> (\(model1, cmd) ->
+            (model1
+            , Cmd.batch
+                [ cmd
+                ,   if model.started == False && model1.started == True then
+                        playSound "astrix_on_mushrooms.ogg"
+                    else
+                        Cmd.none
+                ]
+            )
+        )
 
 handleCollision : Model -> (Model, Cmd Msg)
 handleCollision model =
@@ -325,7 +365,7 @@ gameView model =
                 |> div []
     in
 
-    div (style "overflow" "hidden" :: Helper.positionAndSize Point2.zero screenSize)
+    div ([ style "overflow" "hidden", style "font-family" "Consolas, Arial" ] ++ Helper.positionAndSize Point2.zero screenSize)
         [ backgroundView Point2.zero screenSize model
         , npcCars
 
@@ -335,14 +375,27 @@ gameView model =
             }
             Images.playerCar
         , GearShift.view { x = 800, y = 100 } { x = 290, y = 290 } model
-        , speedometerView { x = 200, y = 100 } model
+        , speedometerView { x = 50, y = 20 } model
         , div
-            ([ style "font-size" "30px"
-            , style "font-family" "Consolas, Arial"
+            ([ style "font-size" "50px"
             , style "color" (if model.secondsLeft < 10 then "red" else "black")
             ]
-                ++ (Helper.positionAndSize { x = screenSize.x / 2 - 100, y = 20 } { x = 300, y = 300 }))
+                ++ (Helper.positionAndSize { x = screenSize.x / 2 - 200, y = 20 } { x = 400, y = 300 }))
             [ "Time Left: " ++ (model.secondsLeft |> max 0 |> Round.round 2 ) |> text ]
+        , if model.secondsLeft <= 0 && model.metersPerSecond <= 0 then
+            div
+                ([ style "text-align" "center", style "font-size" "50px", style "background-color" "#FFFFFFAA" ]
+                    ++ Helper.positionAndSize
+                        { x = screenSize.x / 2 - 375, y = 300 }
+                        { x = 750, y = 190 }
+                )
+                [ text "GAME OVER"
+                , Html.br [] []
+                , text ("You traveled " ++ (-model.metersLeft / 1000 |> Round.round 2) ++ " kilometers!")
+                , Html.button [ style "font-size" "40px", style "margin" "10px", onClick NewGame ] [ text "Play again?" ]
+                ]
+            else
+                div [] []
         ]
 
 
@@ -379,10 +432,15 @@ getRoadPos model tx ty =
 
 speedometerView : Point2 Float -> Model -> Html msg
 speedometerView position model =
-    div (Helper.positionAndSize position { x = 200, y = 200 })
+    div ([ style "font-size" "30px" ] ++ Helper.positionAndSize position { x = 300, y = 300 })
         [ model.metersPerSecond * metersPerSecondToKph
-            |> String.fromFloat
-            |> (\a -> a ++ "KPH")
+            |> Round.round 1
+            |> (\a -> "KPH: " ++ a)
+            |> text
+        , Html.br [] []
+        , -model.metersLeft / 1000
+            |> Round.round 2
+            |> (\a -> "Distance: " ++ a)
             |> text
         ]
 
@@ -413,7 +471,11 @@ backgroundView position size model =
     in
     div []
         [ div
-            ([ style "background-color" "green" ] ++ Helper.positionAndSize { x = 0, y = screenSize.y / 2 } { x = screenSize.x, y = screenSize.y / 2 })
+            ([ style "background-color" "green" ]
+                ++ Helper.positionAndSize
+                    { x = 0, y = screenSize.y / 2 }
+                    { x = screenSize.x, y = screenSize.y / 2 }
+            )
             []
         , div (Helper.positionAndSize position size)
             [ svg
