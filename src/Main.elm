@@ -149,7 +149,7 @@ startingSecondsLeft =
 
 debugMode : Bool
 debugMode =
-    True
+    False
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -372,9 +372,7 @@ view model =
 debugView : Point2 Float -> Model -> Html Msg
 debugView position model =
     div (Helper.positionAndSize position { x = 500, y = 100 })
-        [ model.npcCars |> Helper.debugShow
-        , model.lastCarAddedTime |> Helper.debugShow
-        , model.time |> Helper.debugShow
+        [ 
         ]
 
 

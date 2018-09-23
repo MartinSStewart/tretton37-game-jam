@@ -126,7 +126,7 @@ view position size model =
                         |> Point2.add a
 
                 _ =
-                    Debug.log "a" (Debug.toString a ++ " b" ++ Debug.toString b ++ " c" ++ Debug.toString c ++ " t" ++ Debug.toString t)
+                    0--Debug.log "a" (Debug.toString a ++ " b" ++ Debug.toString b ++ " c" ++ Debug.toString c ++ " t" ++ Debug.toString t)
             in
                 centerPoint
                 -- interpolate

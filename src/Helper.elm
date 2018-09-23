@@ -8,7 +8,7 @@ import Images exposing (Image)
 
 debugShow : a -> Html msg
 debugShow =
-    Debug.toString >> text
+    always (div [] []) --Debug.toString >> text
 
 
 px : Float -> String
