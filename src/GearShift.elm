@@ -14,7 +14,8 @@ import Set exposing (Set)
 type alias GearShiftState r =
     { r
         | gearShiftPath : List Direction
-        , gearShiftIndex : Int
+        , targetGearShiftIndex : Int
+        , currentGearShiftIndex : Float
     }
 
 
@@ -27,7 +28,7 @@ shiftsPerGear =
 
 currentGear : GearShiftState a -> Int
 currentGear model =
-    model.gearShiftIndex // shiftsPerGear
+    model.targetGearShiftIndex // shiftsPerGear
 
 
 moveInPath : List Direction -> Point2 Int
@@ -68,14 +69,19 @@ getGearShiftPathHelper seedRandom path =
 
 nextGearDirection : GearShiftState a -> Maybe Direction
 nextGearDirection model =
-    List.getAt model.gearShiftIndex model.gearShiftPath
+    List.getAt model.targetGearShiftIndex model.gearShiftPath
 
 
 previousGearDirection : GearShiftState a -> Maybe Direction
 previousGearDirection model =
     model.gearShiftPath
-        |> List.getAt (model.gearShiftIndex - 1)
+        |> List.getAt (model.targetGearShiftIndex - 1)
         |> Maybe.map Direction.reverse
+
+
+flip : (a -> b -> c) -> b -> a -> c
+flip function b a =
+    function a b
 
 
 view : Point2 Float -> Point2 Float -> GearShiftState a -> Html msg
@@ -97,22 +103,54 @@ view position size model =
         centerPoint =
             Point2.map ((*) 0.5) size
 
+        viewOffset =
+            let
+                flooredGearIndex =
+                    model.currentGearShiftIndex |> floor
+
+                a =
+                    flooredGearIndex |> flip List.take model.gearShiftPath |> moveInPath |> Point2.map ((*) shiftLength >> toFloat)
+
+                b =
+                    flooredGearIndex |> (+) 1 |> flip List.take model.gearShiftPath |> moveInPath |> Point2.map ((*) shiftLength >> toFloat)
+
+                c =
+                    model.targetGearShiftIndex |> flip List.take model.gearShiftPath |> moveInPath |> Point2.map ((*) shiftLength >> toFloat)
+
+                t =
+                    model.currentGearShiftIndex - (flooredGearIndex |> toFloat)
+
+                interpolate =
+                    Point2.sub b a
+                        |> Point2.map ((*) t)
+                        |> Point2.add a
+
+                _ =
+                    Debug.log "a" (Debug.toString a ++ " b" ++ Debug.toString b ++ " c" ++ Debug.toString c ++ " t" ++ Debug.toString t)
+            in
+                centerPoint
+                -- interpolate
+                --     |> Point2.map negate
+                --     |> flip Point2.sub c
+                --     |> Point2.add centerPoint
+
+
         getPath path index incrementBy drawGear =
             List.foldl
                 (\direction ( html, position1, index1 ) ->
                     (   if drawGear then
                             let
                                 gearIndex =
-                                    (model.gearShiftIndex + index1) // shiftsPerGear
+                                    (model.targetGearShiftIndex + index1) // shiftsPerGear
                             in
 
-                            if modBy shiftsPerGear (model.gearShiftIndex + index1) == 0 then
-                                drawGearNumber (Point2.add position1 centerPoint) shiftLength direction index1 gearIndex :: html
+                            if modBy shiftsPerGear (model.targetGearShiftIndex + index1) == 0 then
+                                drawGearNumber (Point2.add position1 viewOffset) shiftLength direction index1 gearIndex :: html
                             else
                                 html
 
                         else
-                            drawDirection (Point2.add position1 centerPoint) shiftLength direction index1 :: html
+                            drawDirection (Point2.add position1 viewOffset) shiftLength direction index1 :: html
                     , moveInDirection direction shiftLength position1
                     , index1 + incrementBy
                     )
@@ -122,12 +160,12 @@ view position size model =
                 |> (\( html, _, _ ) -> html)
 
         forwardPath =
-            getPath (model.gearShiftPath |> List.drop model.gearShiftIndex) 0 1 False
+            getPath (model.gearShiftPath |> List.drop model.targetGearShiftIndex) 0 1 False
 
         reversePath =
             getPath
                 (model.gearShiftPath
-                    |> List.take model.gearShiftIndex
+                    |> List.take model.targetGearShiftIndex
                     |> List.reverse
                     |> List.map Direction.reverse
                 )
@@ -136,12 +174,12 @@ view position size model =
                 False
 
         forwardGearNumbers =
-            getPath (model.gearShiftPath |> List.drop model.gearShiftIndex) 0 1 True
+            getPath (model.gearShiftPath |> List.drop model.targetGearShiftIndex) 0 1 True
 
         reverseGearNumbers =
             getPath
                 (model.gearShiftPath
-                    |> List.take model.gearShiftIndex
+                    |> List.take model.targetGearShiftIndex
                     |> List.reverse
                     |> List.map Direction.reverse
                 )
@@ -235,22 +273,6 @@ drawGearNumber position length direction stepsFromCurrentGear gearIndex =
 
                 Down ->
                     { x = thickness, y = length1 }
-
-        position1 =
-            (case direction of
-                Left ->
-                    { x = -length1, y = -thickness / 2 }
-
-                Right ->
-                    { x = 0, y = -thickness / 2 }
-
-                Up ->
-                    { x = -thickness / 2, y = -length1 }
-
-                Down ->
-                    { x = -thickness / 2, y = 0 }
-            )
-                |> Point2.add position
 
         color =
             "#333333FF"

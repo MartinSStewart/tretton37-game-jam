@@ -1,12 +1,4 @@
-module Point2 exposing
-    ( Point2
-    , add
-    , map
-    , mirrorX
-    , mirrorY
-    , mult
-    , zero
-    )
+module Point2 exposing (..)
 
 
 type alias Point2 number =
@@ -20,6 +12,11 @@ zero =
 
 add : Point2 number -> Point2 number -> Point2 number
 add pointA pointB =
+    { x = pointA.x + pointB.x, y = pointA.y + pointB.y }
+
+
+sub : Point2 number -> Point2 number -> Point2 number
+sub pointA pointB =
     { x = pointA.x + pointB.x, y = pointA.y + pointB.y }
 
 

@@ -32,7 +32,8 @@ type alias Model =
     { targetLane : Int
     , currentLane : Float
     , gearShiftPath : List Direction
-    , gearShiftIndex : Int
+    , currentGearShiftIndex : Float
+    , targetGearShiftIndex : Int
     , secondsLeft : Float
     , metersLeft : Float
     , metersPerSecond : Float
@@ -44,6 +45,7 @@ type alias Model =
     , started : Bool
     , lastCarAddedTime : Float
     , time : Float
+    , checkpointReachedTime : Float
     }
 
 
@@ -71,7 +73,7 @@ addRandomCar model =
             (Random.float 0 1
                 |> Random.andThen
                     (\a ->
-                        if a < min 0.05 (0.01 * model.metersPerSecond / (gearToMetersPerSecond GearShift.maxGear)) then
+                        if a < (0.05 * model.metersPerSecond / (gearToMetersPerSecond GearShift.maxGear)) then
                             Random.map
                                 (\lane -> (newCar lane (model.metersPerSecond * 0.1) (model.metersLeft - roadMetersVisible)) |> Just)
                                 (Random.int 0 (laneCount - 1))
@@ -101,7 +103,8 @@ newModel seed =
     { targetLane = 1
     , currentLane = 1
     , gearShiftPath = GearShift.getGearShiftPath randomSeed
-    , gearShiftIndex = 0
+    , targetGearShiftIndex = 0
+    , currentGearShiftIndex = 0
     , secondsLeft = startingSecondsLeft
     , metersLeft = 0.0
     , metersPerSecond = 0.0
@@ -113,6 +116,7 @@ newModel seed =
     , started = False
     , lastCarAddedTime = 0
     , time = 0
+    , checkpointReachedTime = -1000
     }
 
 
@@ -140,12 +144,13 @@ metersPerSecondToKph =
 
 
 startingSecondsLeft =
-    40
+    30
 
 
 debugMode : Bool
 debugMode =
     True
+
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
@@ -184,9 +189,12 @@ secondsPerStep =
     1000 / framesPerSecond
 
 
--- nextCheckpoint : Float -> Float
--- nextCheckpoint metersLeft =
---     metersLeft
+nextCheckpoint : Float -> Float
+nextCheckpoint metersLeft =
+    [ 500, 1500, 3000, 5000, 8000, 11000, 15000, 20000, 25000, 30000]
+        |> List.dropWhile (\a -> a < metersLeft)
+        |> List.head
+        |> Maybe.withDefault 1000000
 
 
 step : Model -> (Model, Cmd Msg)
@@ -217,17 +225,23 @@ step model =
                 max targetLane1 (model.currentLane - min 0.3 (0.01 * model.metersPerSecond))
             else
                 min targetLane1 (model.currentLane + min 0.3 (0.01 * model.metersPerSecond))
-        , gearShiftIndex =
+        , targetGearShiftIndex =
             if model.secondsLeft <= 0 then
-                model.gearShiftIndex
+                model.targetGearShiftIndex
             else if (KeyHelper.arrowPressed model |> Just) == (GearShift.nextGearDirection model |> Maybe.map Direction.toPoint) then
-                model.gearShiftIndex + 1
+                model.targetGearShiftIndex + 1
 
             else if (KeyHelper.arrowPressed model |> Just) == (GearShift.previousGearDirection model |> Maybe.map Direction.toPoint) then
-                model.gearShiftIndex - 1
+                model.targetGearShiftIndex - 1
 
             else
-                model.gearShiftIndex
+                model.targetGearShiftIndex
+        , currentGearShiftIndex =
+            --(model.currentGearShiftIndex + toFloat model.targetGearShiftIndex) / 2
+            (if model.currentGearShiftIndex < toFloat model.targetGearShiftIndex then
+                model.currentGearShiftIndex + 0.01
+            else
+                model.currentGearShiftIndex - 0.01)
         , started =
             if GearShift.currentGear model > 0 then
                 True
@@ -254,6 +268,12 @@ step model =
                 startingSecondsLeft
         , time = model.time + 0.016
     }
+    |> (\model1 ->
+            if nextCheckpoint -model.metersLeft /= nextCheckpoint -model1.metersLeft then
+                { model1 | secondsLeft = model1.secondsLeft + 10, checkpointReachedTime = model1.time }
+            else
+                model1
+        )
     |> (\model1 ->
             if model1.secondsLeft <= 0 || model1.time - 0.6 < model1.lastCarAddedTime then
                 model1
@@ -303,11 +323,11 @@ handleCollision model =
 
     ({ model
         | npcCars = npcCarTuples |> List.map (\(npcCar, _) -> npcCar)
-        , gearShiftIndex =
+        , targetGearShiftIndex =
             if hasCollided then
-                model.gearShiftIndex // 2 |> max GearShift.shiftsPerGear
+                model.targetGearShiftIndex * 2 // 3 |> max GearShift.shiftsPerGear
             else
-                model.gearShiftIndex
+                model.targetGearShiftIndex
         , metersPerSecond =
             if hasCollided then
                 model.metersPerSecond / 2
@@ -377,7 +397,7 @@ gameView model =
                                 Images.npcCar.size |> Point2.map (toFloat >> (*) ((1 - imageSizeRatio) * distanceT + imageSizeRatio))
                         in
 
-                        img ([ src Images.npcCar.source ]
+                        img ([ (if npcCar.destroyed then Images.npcCarDead.source else Images.npcCar.source) |> src  ]
                                 ++ Helper.positionAndSize
                                     (getRoadPos
                                         model
@@ -424,11 +444,21 @@ gameView model =
                         { x = screenSize.x / 2 - 375, y = 300 }
                         { x = 750, y = 190 }
                 )
-                [ text "GAME OVER"
+                [ text "TIME IS UP!"
                 , Html.br [] []
                 , text ("You traveled " ++ (-model.metersLeft / 1000 |> Round.round 2) ++ " kilometers!")
                 , Html.button [ style "font-size" "40px", style "margin" "10px", onClick NewGame ] [ text "Play again?" ]
                 ]
+            else
+                div [] []
+        , if model.checkpointReachedTime + 3 > model.time then
+            div
+                ([ style "text-align" "center", style "font-size" "50px" ]
+                    ++ Helper.positionAndSize
+                        { x = screenSize.x / 2 - 375, y = 300 }
+                        { x = 750, y = 190 }
+                )
+                [ text "Checkpoint!! (+10 seconds)" ]
             else
                 div [] []
         ]
@@ -462,7 +492,7 @@ getRoadPos model tx ty =
 
 speedometerView : Point2 Float -> Model -> Html msg
 speedometerView position model =
-    div ([ style "font-size" "30px" ] ++ Helper.positionAndSize position { x = 300, y = 300 })
+    div ([ style "font-size" "30px" ] ++ Helper.positionAndSize position { x = 400, y = 300 })
         [ model.metersPerSecond * metersPerSecondToKph
             |> Round.round 1
             |> (\a -> "KPH: " ++ a)
@@ -476,6 +506,11 @@ speedometerView position model =
         , GearShift.currentGear model
             |> String.fromInt
             |> (\a -> "Gear: " ++ a)
+            |> text
+        , Html.br [] []
+        , ((nextCheckpoint -model.metersLeft) + model.metersLeft) / 1000
+            |> Round.round 2
+            |> (\a -> "Next checkpoint: " ++ a)
             |> text
         ]
 
@@ -571,6 +606,7 @@ subscriptions model =
               Sub.none
           else
               Time.every secondsPerStep Step
+              --Time.every 2000 Step
         ]
 
 
@@ -582,7 +618,7 @@ main : Program () Model Msg
 main =
     Browser.element
         { view = view
-        , init = \_ -> newModel 123125 |> addCmdNone
+        , init = \_ -> newModel 123124 |> addCmdNone
         , update = update
         , subscriptions = subscriptions
         }
