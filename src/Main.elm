@@ -254,6 +254,10 @@ step model =
                         playSound "astrix_on_mushrooms.ogg"
                     else
                         Cmd.none
+                ,   if model.secondsLeft > 0 && model1.secondsLeft <= 0 then
+                        stopSound "astrix_on_mushrooms.ogg"
+                    else
+                        Cmd.none
                 ]
             )
         )
@@ -308,6 +312,11 @@ playSound soundName =
         |> Json.encodePortOutMsg
         |> Ports.portOut
 
+stopSound : String -> Cmd msg
+stopSound soundName =
+    Ports.StopSound { soundName = soundName }
+        |> Json.encodePortOutMsg
+        |> Ports.portOut
 
 laneCount : number
 laneCount =
