@@ -286,11 +286,11 @@ step model =
             , Cmd.batch
                 [ cmd
                 ,   if model.started == False && model1.started == True then
-                        playSound "astrix_on_mushrooms.ogg.png"
+                        playSound "https://s1.vocaroo.com/media/download_temp/Vocaroo_s1QCkfTPVxgm.mp3"
                     else
                         Cmd.none
                 ,   if model.secondsLeft > 0 && model1.secondsLeft <= 0 then
-                        stopSound "astrix_on_mushrooms.ogg.png"
+                        stopSound "https://s1.vocaroo.com/media/download_temp/Vocaroo_s1QCkfTPVxgm.mp3"
                     else
                         Cmd.none
                 ]
