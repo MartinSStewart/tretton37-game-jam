@@ -42,6 +42,8 @@ type alias Model =
     , randomSeed : Random.Seed
     , pause : Bool
     , started : Bool
+    , lastCarAddedTime : Float
+    , time : Float
     }
 
 
@@ -81,6 +83,11 @@ addRandomCar model =
             { model
                 | npcCars = Maybe.toList car ++ model.npcCars
                 , randomSeed = seed
+                , lastCarAddedTime =
+                    if car == Nothing then
+                        model.lastCarAddedTime
+                    else
+                        model.time
             })
 
 
@@ -104,6 +111,8 @@ newModel seed =
     , randomSeed = randomSeed
     , pause = False
     , started = False
+    , lastCarAddedTime = 0
+    , time = 0
     }
 
 
@@ -131,7 +140,7 @@ metersPerSecondToKph =
 
 
 startingSecondsLeft =
-    10
+    40
 
 
 debugMode : Bool
@@ -243,8 +252,14 @@ step model =
                 model.secondsLeft - 0.016
             else
                 startingSecondsLeft
+        , time = model.time + 0.016
     }
-    |> addRandomCar
+    |> (\model1 ->
+            if model1.secondsLeft <= 0 || model1.time - 0.6 < model1.lastCarAddedTime then
+                model1
+            else
+                addRandomCar model1
+        )
     |> handleCollision
     |> (\(model1, cmd) ->
             (model1
@@ -338,6 +353,8 @@ debugView : Point2 Float -> Model -> Html Msg
 debugView position model =
     div (Helper.positionAndSize position { x = 500, y = 100 })
         [ model.npcCars |> Helper.debugShow
+        , model.lastCarAddedTime |> Helper.debugShow
+        , model.time |> Helper.debugShow
         ]
 
 

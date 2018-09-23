@@ -22,7 +22,7 @@ maxGear =
     25
 
 shiftsPerGear =
-    4
+    3
 
 
 currentGear : GearShiftState a -> Int
@@ -34,37 +34,83 @@ moveInPath : List Direction -> Point2 Int
 moveInPath path =
     List.foldl (\a b -> a |> Direction.toPoint |> Point2.add b) Point2.zero path
 
+pointsInPath : List Direction -> List (Point2 Int)
+pointsInPath path =
+    List.range 0 (List.length path |> (+) -1)
+        |> List.map (\index -> List.take index path |> moveInPath)
+
 
 getGearShiftPath : Random.Seed -> List Direction
 getGearShiftPath seed =
-    getGearShiftPathHelper seed (maxGear * shiftsPerGear) Set.empty []
+    getGearShiftPathHelper seed []
 
-
-getGearShiftPathHelper : Random.Seed -> Int -> Set ( Int, Int ) -> List Direction -> List Direction
-getGearShiftPathHelper seed stepsLeft set path =
+getGearShiftPathHelper : Random.Seed -> List Direction -> List Direction
+getGearShiftPathHelper seedRandom path =
     let
-        ( direction, seed1 ) =
-            Random.step Direction.random seed
+        existingPoints =
+            pointsInPath (List.reverse path)
 
-        position =
-            moveInPath (direction :: path) |> (\a -> ( a.x, a.y ))
+        (nextDirection, seedRandom1) =
+            Random.step
+                (Random.uniform Left [ Left, Up, Right, Down ])
+                seedRandom
 
-        direction1 =
-            if Set.member position set then
-                Right
-
-            else
-                direction
+        nextPoint =
+            moveInPath (nextDirection :: path)
     in
-    if stepsLeft == 0 then
-        path
+        if List.length path > (maxGear * shiftsPerGear) then
+            path
+        else if List.any (\a -> nextPoint == a) existingPoints then
+            getGearShiftPathHelper seedRandom1 (List.drop 1 path)
+        else
+            getGearShiftPathHelper seedRandom1 (nextDirection :: path)
+        -- if List.empty branches then
+        --     getGearShiftPathHelper
+        --         seedRandom
+        --         availableDirections
+        --         (List.drop 1 path)
+        --         (List.head path |> Maybe.withDefault Left |> Direction.turnLeft)
+        -- else
 
-    else
-        getGearShiftPathHelper
-            seed1
-            (stepsLeft - 1)
-            (Set.insert position set)
-            (direction1 :: path)
+
+
+-- getGearShiftPathHelper : Random.Seed -> Int -> Set ( Int, Int ) -> List Direction -> Maybe (List Direction)
+-- getGearShiftPathHelper seed stepsLeft set path =
+--     let
+--         ( direction, seed1 ) =
+--             Random.step Direction.random seed
+--
+--         position =
+--             moveInPath (direction :: path) |> (\a -> ( a.x, a.y ))
+--
+--         direction1 =
+--             if Set.insert position set then
+--                 Right
+--
+--             else
+--                 direction
+--
+--         next =
+--             getGearShiftPathHelper
+--                 seed1
+--                 (stepsLeft - 1)
+--                 (Set.insert position set)
+--                 (direction1 :: path)
+--     in
+--     if stepsLeft == 0 then
+--         Just path
+--     else
+--         case next of
+--             Just a ->
+--
+--             Nothing ->
+--                 getGearShiftPathHelper
+--                     seed1
+--                     (stepsLeft - 1)
+--                     (Set.insert position set)
+--                     (direction1 :: path)
+
+
 
 
 nextGearDirection : GearShiftState a -> Maybe Direction

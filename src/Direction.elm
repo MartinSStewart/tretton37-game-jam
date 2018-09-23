@@ -42,6 +42,21 @@ reverse direction =
         Down ->
             Up
 
+turnLeft : Direction -> Direction
+turnLeft direction =
+    case direction of
+        Left ->
+            Up
+
+        Right ->
+            Down
+
+        Up ->
+            Right
+
+        Down ->
+            Left
+
 random : Random.Generator Direction
 random =
     Random.int 0 3
