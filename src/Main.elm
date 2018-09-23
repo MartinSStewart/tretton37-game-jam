@@ -286,11 +286,11 @@ step model =
             , Cmd.batch
                 [ cmd
                 ,   if model.started == False && model1.started == True then
-                        playSound "astrix_on_mushrooms.ogg"
+                        playSound "astrix_on_mushrooms.ogg.png"
                     else
                         Cmd.none
                 ,   if model.secondsLeft > 0 && model1.secondsLeft <= 0 then
-                        stopSound "astrix_on_mushrooms.ogg"
+                        stopSound "astrix_on_mushrooms.ogg.png"
                     else
                         Cmd.none
                 ]
