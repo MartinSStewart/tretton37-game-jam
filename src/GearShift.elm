@@ -89,7 +89,7 @@ view position size model =
     let
         gearUpText =
             if currentGear model == 0 then
-                div ([ style "font-size" "50px", style "font-family" "Consolas, Arial" ]
+                div ([ style "font-size" "50px", style "font-family" "Arial" ]
                         ++ Helper.positionAndSize
                             { x = -350, y = 55 }
                             { x = 450, y = 30 }

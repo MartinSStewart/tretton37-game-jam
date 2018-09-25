@@ -437,7 +437,7 @@ gameView model =
                 |> div []
     in
 
-    div ([ style "overflow" "hidden", style "font-family" "Consolas, Arial" ] ++ Helper.positionAndSize Point2.zero screenSize)
+    div ([ style "overflow" "hidden", style "font-family" "Arial" ] ++ Helper.positionAndSize Point2.zero screenSize)
         [ backgroundView Point2.zero screenSize model
         , npcCars
 
