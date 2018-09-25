@@ -23,7 +23,9 @@ import Ease
 import Ports
 import Json
 import Round
-
+import Http
+import Json.Decode as Decode
+import Json.Encode as Encode
 
 ---- MODEL ----
 
@@ -46,6 +48,8 @@ type alias Model =
     , lastCarAddedTime : Float
     , time : Float
     , checkpointReachedTime : Float
+    , highscores : Maybe (List (String, Float))
+    , name : String
     }
 
 
@@ -93,8 +97,8 @@ addRandomCar model =
             })
 
 
-newModel : Int -> Model
-newModel seed =
+newModel : Int -> Maybe (List (String, Float)) -> String -> Model
+newModel seed highscores name =
     let
         randomSeed =
             Random.initialSeed seed
@@ -117,6 +121,8 @@ newModel seed =
     , lastCarAddedTime = 0
     , time = 0
     , checkpointReachedTime = -1000
+    , highscores = highscores
+    , name = name
     }
 
 
@@ -129,6 +135,10 @@ type Msg
     | KeyMsg Keyboard.Msg
     | Step Time.Posix
     | NewGame
+    | GetHighscores (Result Http.Error (List (String, Float)))
+    | SetHighscores (Result Http.Error ())
+    | AddHighscore (String, Float)
+    | NameChanged String
 
 
 addCmdNone model =
@@ -149,7 +159,7 @@ startingSecondsLeft =
 
 debugMode : Bool
 debugMode =
-    False
+    True
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -178,7 +188,25 @@ update msg model =
             step model
 
         NewGame ->
-            newModel (Random.step (Random.int 0 100000) model.randomSeed |> Tuple.first) |> addCmdNone
+            newModel (Random.step (Random.int 0 100000) model.randomSeed |> Tuple.first) model.highscores model.name |> (\a -> (a, getHighscores))
+
+        GetHighscores result ->
+            case result of
+                Ok value ->
+                    { model | highscores = Just value } |> addCmdNone
+
+                Err error ->
+                    model |> addCmdNone
+
+        SetHighscores _ ->
+            newModel (Random.step (Random.int 0 100000) model.randomSeed |> Tuple.first) model.highscores model.name |> (\a -> (a, getHighscores))
+
+
+        NameChanged name ->
+            { model | name = name |> String.toList |> List.take 12 |> String.fromList } |> addCmdNone
+
+        AddHighscore (name, value) ->
+            (model, setHighscores (model.highscores |> Maybe.withDefault [] |> (::) (name, value) |> List.sortBy (\(_, x) -> -x) |> List.take 10))
 
 
 framesPerSecond =
@@ -284,16 +312,16 @@ step model =
     |> (\(model1, cmd) ->
             (model1
             , Cmd.batch
-                [ cmd
-                ,   if model.started == False && model1.started == True then
-                        playSound "https://s1.vocaroo.com/media/download_temp/Vocaroo_s1QCkfTPVxgm.mp3"
+                (cmd ::
+                    (if model.started == False && model1.started == True then
+                        [ playSound "astrix_on_mushrooms.ogg" ]
                     else
-                        Cmd.none
-                ,   if model.secondsLeft > 0 && model1.secondsLeft <= 0 then
-                        stopSound "https://s1.vocaroo.com/media/download_temp/Vocaroo_s1QCkfTPVxgm.mp3"
+                        []) ++
+                    (if model.secondsLeft > 0 && model1.secondsLeft <= 0 then
+                        [ getHighscores, stopSound "astrix_on_mushrooms.ogg"]
                     else
-                        Cmd.none
-                ]
+                        []))
+
             )
         )
 
@@ -434,18 +462,43 @@ gameView model =
                     ([ style "color" "white", style "font-size" "50px", style "text-align" "center" ]
                         ++ (Helper.positionAndSize { x = screenSize.x / 2 - 300, y = 640 } { x = 600, y = 300 }))
                     [ text "← Steer with A and D →" ]
-
+        , if model.started then
+                div [] []
+            else
+                highscoreTable Nothing model.highscores
         , if model.secondsLeft <= 0 && model.metersPerSecond <= 0 then
+            let
+                newRecord =
+                    model.highscores
+                        |> Maybe.map (\a -> a |> List.any (\(_, value) -> value < -model.metersLeft) |> (||) (List.length a < 10))
+                        |> Maybe.withDefault False
+            in
+
             div
                 ([ style "text-align" "center", style "font-size" "50px", style "background-color" "#FFFFFFAA" ]
                     ++ Helper.positionAndSize
                         { x = screenSize.x / 2 - 375, y = 300 }
-                        { x = 750, y = 190 }
+                        { x = 750, y = 250 }
                 )
                 [ text "TIME IS UP!"
                 , Html.br [] []
                 , text ("You traveled " ++ (-model.metersLeft / 1000 |> Round.round 2) ++ " kilometers!")
-                , Html.button [ style "font-size" "40px", style "margin" "10px", onClick NewGame ] [ text "Play again?" ]
+                , if newRecord then
+                    div []
+                        [ text "NEW RECORD! "
+                        , Html.input
+                            [ Html.Attributes.type_ "textbox"
+                            , Html.Attributes.value model.name, Html.Events.onInput NameChanged
+                            , style "font-size" "30px"
+                            ]
+                            [ text "Your name" ]]
+                else
+                    div [] []
+                , Html.button
+                    [ style "font-size" "40px", style "margin" "10px"
+                    , onClick (if newRecord then AddHighscore (model.name, -model.metersLeft) else NewGame)
+                    ]
+                    [ text (if newRecord then "Upload Score" else "Play again?") ]
                 ]
             else
                 div [] []
@@ -512,6 +565,34 @@ speedometerView position model =
             |> text
         ]
 
+
+highscoreTable : Maybe Int -> Maybe (List (String, Float)) -> Html msg
+highscoreTable newScore maybeScoreList =
+    let
+        rows =
+            case maybeScoreList of
+                Just scoreList ->
+                    scoreList
+                        |> List.sortBy (\(_, value) -> -value)
+                        |> List.take 10
+                        |> List.indexedMap
+                            (\index (name, value) ->
+                                div ((if Just index == newScore then [ style "background-color" "#FFFF00AA" ] else []) ++ [ style "font-size" "20px" ])
+                                    [ div
+                                        [ style "float" "left" ]
+                                        [ (String.fromInt (index + 1) ++ ". " ++ name) |> text ]
+                                    , div
+                                        [ style "text-align" "right" ]
+                                        [ value / 1000 |> Round.round 2 |> (\a -> a ++ "km") |> text ]
+                                    ]
+                            )
+
+                Nothing ->
+                    [ div [ style "font-size" "20px" ] [ text "Failed to load :(" ] ]
+
+    in
+    div ([ style "background-color" "#FFFFFFAA", style "margin" "5px" ] ++ (Helper.positionAndSize { x = 20, y = 270 } { x = 300, y = 440 }))
+        (div [ style "font-size" "40px" ] [ text "Highscores"] :: rows)
 
 backgroundView : Point2 Float -> Point2 Float -> Model -> Html Msg
 backgroundView position size model =
@@ -594,6 +675,47 @@ screenSize =
     Point2 1280 720
 
 
+getHighscores =
+    Http.send
+        GetHighscores
+        (Http.get "https://jsonblob.com/api/jsonBlob/47c3ecd1-c0eb-11e8-89ae-87206f1f315c" decodeHighscores)
+
+decodeHighscoreRow : Decode.Decoder (String, Float)
+decodeHighscoreRow =
+    Decode.map2 (\a b -> (a,b))
+        (Decode.field "name" Decode.string)
+        (Decode.field "value" Decode.float)
+
+decodeHighscores : Decode.Decoder (List (String, Float))
+decodeHighscores =
+    Decode.list decodeHighscoreRow
+
+setHighscores highscores =
+    Http.send
+        SetHighscores
+        (put "https://jsonblob.com/api/jsonBlob/47c3ecd1-c0eb-11e8-89ae-87206f1f315c" (encodeHighscores highscores |> Http.jsonBody))
+
+
+encodeHighscores highscores =
+    Encode.list encodeHighscoreRow highscores
+
+encodeHighscoreRow (name, value) =
+    Encode.object [ ("name", Encode.string name), ("value", Encode.float value) ]
+
+
+put : String -> Http.Body -> Http.Request ()
+put url body =
+  Http.request
+    { method = "PUT"
+    , headers = []
+    , url = url
+    , body = body
+    , expect = Http.expectStringResponse (\_ -> Ok ())
+    , timeout = Nothing
+    , withCredentials = False
+    }
+
+
 ---- SUBSCRIPTION ----
 
 
@@ -616,7 +738,8 @@ main : Program () Model Msg
 main =
     Browser.element
         { view = view
-        , init = \_ -> newModel 123121 |> addCmdNone
+        , init = \_ -> newModel 123121 Nothing "Your name"
+            |> (\a -> (a, getHighscores))
         , update = update
         , subscriptions = subscriptions
         }
