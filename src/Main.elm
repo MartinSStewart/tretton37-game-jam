@@ -675,11 +675,6 @@ screenSize =
     Point2 1280 720
 
 
-getHighscores =
-    Http.send
-        GetHighscores
-        (Http.get "https://jsonblob.com/api/jsonBlob/47c3ecd1-c0eb-11e8-89ae-87206f1f315c" decodeHighscores)
-
 decodeHighscoreRow : Decode.Decoder (String, Float)
 decodeHighscoreRow =
     Decode.map2 (\a b -> (a,b))
@@ -690,10 +685,6 @@ decodeHighscores : Decode.Decoder (List (String, Float))
 decodeHighscores =
     Decode.list decodeHighscoreRow
 
-setHighscores highscores =
-    Http.send
-        SetHighscores
-        (put "https://jsonblob.com/api/jsonBlob/47c3ecd1-c0eb-11e8-89ae-87206f1f315c" (encodeHighscores highscores |> Http.jsonBody))
 
 
 encodeHighscores highscores =
@@ -702,18 +693,6 @@ encodeHighscores highscores =
 encodeHighscoreRow (name, value) =
     Encode.object [ ("name", Encode.string name), ("value", Encode.float value) ]
 
-
-put : String -> Http.Body -> Http.Request ()
-put url body =
-  Http.request
-    { method = "PUT"
-    , headers = []
-    , url = url
-    , body = body
-    , expect = Http.expectStringResponse (\_ -> Ok ())
-    , timeout = Nothing
-    , withCredentials = False
-    }
 
 
 ---- SUBSCRIPTION ----
@@ -731,15 +710,3 @@ subscriptions model =
 
 
 
----- PROGRAM ----
-
-
-main : Program () Model Msg
-main =
-    Browser.element
-        { view = view
-        , init = \_ -> newModel 123121 Nothing "Your name"
-            |> (\a -> (a, getHighscores))
-        , update = update
-        , subscriptions = subscriptions
-        }
