@@ -16,7 +16,7 @@ app =
         , onUrlChange = UrlChanged
         , update = update
         , updateFromBackend = updateFromBackend
-        , subscriptions = \m -> Sub.none
+        , subscriptions = subscriptions
         , view = view
         }
 
@@ -62,9 +62,13 @@ updateFromBackend msg model =
     ( model, Cmd.none )
 
 
+subscriptions model =
+    Main.subscriptions model.model |> Sub.map MainMsg
+
+
 view model =
     { title = ""
     , body =
-        [ Main.view model.model
+        [ Main.view model.model |> Html.map MainMsg
         ]
     }
