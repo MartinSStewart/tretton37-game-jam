@@ -1,5 +1,6 @@
 module Frontend exposing (app, init, update, updateFromBackend, view)
 
+import Audio exposing (AudioCmd)
 import Browser exposing (UrlRequest(..))
 import Browser.Navigation as Nav
 import Html
@@ -10,7 +11,7 @@ import Url
 
 
 app =
-    Lamdera.frontend
+    Audio.lamderaFrontendWithAudio
         { init = init
         , onUrlRequest = UrlClicked
         , onUrlChange = UrlChanged
@@ -18,17 +19,20 @@ app =
         , updateFromBackend = updateFromBackend
         , subscriptions = subscriptions
         , view = view
+        , audio = always Audio.silence
+        , audioPort = { toJS = always Cmd.none, fromJS = always Sub.none }
         }
 
 
-init : Url.Url -> Nav.Key -> ( FrontendModel, Cmd FrontendMsg )
+init : Url.Url -> Nav.Key -> ( FrontendModel_, Cmd FrontendMsg_, AudioCmd FrontendMsg_ )
 init url key =
     ( { key = key, model = Main.newModel 321321 Nothing "No name" }
     , Cmd.none
+    , Audio.cmdNone
     )
 
 
-update : FrontendMsg -> FrontendModel -> ( FrontendModel, Cmd FrontendMsg )
+update : FrontendMsg_ -> FrontendModel_ -> ( FrontendModel_, Cmd FrontendMsg_, AudioCmd FrontendMsg_ )
 update msg model =
     case msg of
         UrlClicked urlRequest ->
@@ -36,30 +40,32 @@ update msg model =
                 Internal url ->
                     ( model
                     , Cmd.batch [ Nav.pushUrl model.key (Url.toString url) ]
+                    , Audio.cmdNone
                     )
 
                 External url ->
                     ( model
                     , Nav.load url
+                    , Audio.cmdNone
                     )
 
         UrlChanged url ->
-            ( model, Cmd.none )
+            ( model, Cmd.none, Audio.cmdNone )
 
         MainMsg mainMsg ->
             let
                 ( mainModel, cmd ) =
                     Main.update mainMsg model.model
             in
-            ( { model | model = mainModel }, Cmd.map MainMsg cmd )
+            ( { model | model = mainModel }, Cmd.map MainMsg cmd, Audio.cmdNone )
 
         NoOpFrontendMsg ->
-            ( model, Cmd.none )
+            ( model, Cmd.none, Audio.cmdNone )
 
 
-updateFromBackend : ToFrontend -> FrontendModel -> ( FrontendModel, Cmd FrontendMsg )
+updateFromBackend : ToFrontend -> FrontendModel_ -> ( FrontendModel_, Cmd FrontendMsg_, AudioCmd FrontendMsg_ )
 updateFromBackend msg model =
-    ( model, Cmd.none )
+    ( model, Cmd.none, Audio.cmdNone )
 
 
 subscriptions model =
