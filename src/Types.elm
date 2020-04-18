@@ -1,4 +1,4 @@
-module Types exposing (BackendModel, BackendMsg(..), FrontendModel, FrontendModel_, FrontendMsg_(..), ToBackend(..), ToFrontend(..))
+module Types exposing (BackendModel, BackendMsg(..), FrontendModel, FrontendModel_, FrontendMsg, FrontendMsg_(..), ToBackend(..), ToFrontend(..))
 
 import Audio
 import Browser exposing (UrlRequest)
