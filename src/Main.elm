@@ -744,7 +744,7 @@ screenSize =
 getHighscores : Cmd Msg
 getHighscores =
     Http.request
-        { method = "GET"
+        { method = "POST"
         , headers = []
         , url = "https://someuniqueappid.simplex.app/highscores"
         , body = Http.bytesBody "application/octet-stream" (Codec.Bytes.encodeToValue MainLogic.frontendMsgCodec RequestHighscores)
