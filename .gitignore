@@ -16,3 +16,5 @@ node_modules
 .idea
 
 simplex-stuff
+
+yarn-error.log

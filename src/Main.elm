@@ -1,4 +1,4 @@
-port module Main exposing (main)
+module Main exposing (main)
 
 import Browser
 import Codec.Bytes
@@ -193,6 +193,10 @@ update msg model =
             newModel (Random.step (Random.int 0 100000) model.randomSeed |> Tuple.first) model.highscores model.name |> (\a -> ( a, getHighscores ))
 
         GetHighscores result ->
+            let
+                _ =
+                    Debug.log "" result
+            in
             case result of
                 Ok value ->
                     { model | highscores = Just value } |> addCmdNone
@@ -737,11 +741,12 @@ screenSize =
     Point2 1280 720
 
 
+getHighscores : Cmd Msg
 getHighscores =
     Http.request
         { method = "GET"
         , headers = []
-        , url = "/highscores"
+        , url = "https://someuniqueappid.simplex.app/highscores"
         , body = Http.bytesBody "application/octet-stream" (Codec.Bytes.encodeToValue MainLogic.frontendMsgCodec RequestHighscores)
         , expect = Http.expectBytes GetHighscores (Codec.Bytes.decoder MainLogic.highscoreCodec)
         , timeout = Just (30 * 1000)

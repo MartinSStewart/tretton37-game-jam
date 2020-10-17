@@ -1,6 +1,6 @@
 {
   "dependencies": {
-    "create-elm-app": "^2.0.3",
+    "create-elm-app": "^5.9.0",
     "elm-format": "^0.8.0",
     "elm-json": "^0.2.8"
   }

@@ -12,10 +12,6 @@ type Msg
     | NoOp
 
 
-type OldMsg
-    = GetRequest HSL.HttpRequest
-
-
 update : Msg -> Model -> ( Model, Cmd msg )
 update msg model =
     case msg of
@@ -53,7 +49,7 @@ update msg model =
                         { requestId = req.requestId
                         , status = 200
                         , headers = [ ( "Content-Type", "text/plain" ) ]
-                        , body = Bytes.Encode.string "Bad body" |> Bytes.Encode.encode
+                        , body = req.body
                         }
                     )
 
@@ -66,7 +62,7 @@ init =
     { highscores = [] }
 
 
-main : Simplex.BackendProgram () Model Msg ( OldMsg, Model )
+main : Simplex.BackendProgram () Model Msg ( Msg, Model )
 main =
     Simplex.zeroDowntimeMigration
         { update = update
