@@ -2,6 +2,7 @@
   "dependencies": {
     "create-elm-app": "^5.9.0",
     "elm-format": "^0.8.0",
-    "elm-json": "^0.2.8"
+    "elm-json": "^0.2.8",
+    "elm-test": "^0.19.1-revision4"
   }
 }

@@ -193,10 +193,6 @@ update msg model =
             newModel (Random.step (Random.int 0 100000) model.randomSeed |> Tuple.first) model.highscores model.name |> (\a -> ( a, getHighscores ))
 
         GetHighscores result ->
-            let
-                _ =
-                    Debug.log "" result
-            in
             case result of
                 Ok value ->
                     { model | highscores = Just value } |> addCmdNone
@@ -746,7 +742,7 @@ getHighscores =
     Http.request
         { method = "POST"
         , headers = []
-        , url = "https://someuniqueappid.simplex.app/highscores"
+        , url = "https://someuniqueappid.simplex.app/highscoress"
         , body = Http.bytesBody "application/octet-stream" (Codec.Bytes.encodeToValue Shared.frontendMsgCodec RequestHighscores)
         , expect = Http.expectBytes GetHighscores (Codec.Bytes.decoder Shared.highscoreCodec)
         , timeout = Just (30 * 1000)

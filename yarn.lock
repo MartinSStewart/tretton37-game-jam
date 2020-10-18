@@ -2603,7 +2603,7 @@ elm-json:
   dependencies:
     binwrap "^0.2.2"
 
-elm-test@latest-0.19.1:
+elm-test, elm-test@latest-0.19.1:
   version "0.19.1-revision4"
   resolved "https://registry.yarnpkg.com/elm-test/-/elm-test-0.19.1-revision4.tgz#ae7b39a892ae8267de53bd15821ee78971a160c9"
   dependencies:
