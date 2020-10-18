@@ -15,12 +15,12 @@ import Json
 import KeyHelper
 import Keyboard exposing (Key(..))
 import List.Extra as List
-import MainLogic exposing (FrontendMsg(..))
 import Maybe.Extra as Maybe
 import Point2 exposing (..)
 import Ports
 import Random
 import Round
+import Shared exposing (FrontendMsg(..))
 import Svg exposing (svg)
 import Svg.Attributes exposing (height, viewBox, width, x, y)
 import Time
@@ -747,8 +747,8 @@ getHighscores =
         { method = "POST"
         , headers = []
         , url = "https://someuniqueappid.simplex.app/highscores"
-        , body = Http.bytesBody "application/octet-stream" (Codec.Bytes.encodeToValue MainLogic.frontendMsgCodec RequestHighscores)
-        , expect = Http.expectBytes GetHighscores (Codec.Bytes.decoder MainLogic.highscoreCodec)
+        , body = Http.bytesBody "application/octet-stream" (Codec.Bytes.encodeToValue Shared.frontendMsgCodec RequestHighscores)
+        , expect = Http.expectBytes GetHighscores (Codec.Bytes.decoder Shared.highscoreCodec)
         , timeout = Just (30 * 1000)
         , tracker = Nothing
         }

@@ -3,7 +3,7 @@ module Main exposing (Msg(..), main, update)
 import Bytes.Encode
 import Codec.Bytes exposing (Codec)
 import Http.Server.LowLevel as HSL
-import MainLogic exposing (FrontendMsg(..), Model)
+import Shared exposing (FrontendMsg(..), Model)
 import Simplex
 
 
@@ -16,42 +16,53 @@ update : Msg -> Model -> ( Model, Cmd msg )
 update msg model =
     case msg of
         GetRequest_ req ->
-            case Codec.Bytes.decodeValue MainLogic.frontendMsgCodec req.body of
-                Just RequestHighscores ->
-                    ( model
-                    , HSL.respond
-                        { requestId = req.requestId
-                        , status = 200
-                        , headers = [ ( "Content-Type", "application/octet-stream" ) ]
-                        , body =
-                            Codec.Bytes.encodeToValue MainLogic.highscoreCodec model.highscores
-                        }
-                    )
+            if req.method == HSL.Options then
+                ( model
+                , HSL.respond
+                    { requestId = req.requestId
+                    , status = 200
+                    , headers = [ ( "Content-Type", "text/plain" ) ]
+                    , body = Bytes.Encode.sequence [] |> Bytes.Encode.encode
+                    }
+                )
 
-                Just (NewHighscore name score) ->
-                    let
-                        newModel =
-                            MainLogic.addHighscore name score model
-                    in
-                    ( newModel
-                    , HSL.respond
-                        { requestId = req.requestId
-                        , status = 200
-                        , headers = [ ( "Content-Type", "application/octet-stream" ) ]
-                        , body =
-                            Codec.Bytes.encodeToValue MainLogic.highscoreCodec newModel.highscores
-                        }
-                    )
+            else
+                case Codec.Bytes.decodeValue Shared.frontendMsgCodec req.body of
+                    Just RequestHighscores ->
+                        ( model
+                        , HSL.respond
+                            { requestId = req.requestId
+                            , status = 200
+                            , headers = [ ( "Content-Type", "application/octet-stream" ) ]
+                            , body =
+                                Codec.Bytes.encodeToValue Shared.highscoreCodec model.highscores
+                            }
+                        )
 
-                Nothing ->
-                    ( model
-                    , HSL.respond
-                        { requestId = req.requestId
-                        , status = 200
-                        , headers = [ ( "Content-Type", "text/plain" ) ]
-                        , body = req.body
-                        }
-                    )
+                    Just (NewHighscore name score) ->
+                        let
+                            newModel =
+                                Shared.addHighscore name score model
+                        in
+                        ( newModel
+                        , HSL.respond
+                            { requestId = req.requestId
+                            , status = 200
+                            , headers = [ ( "Content-Type", "application/octet-stream" ) ]
+                            , body =
+                                Codec.Bytes.encodeToValue Shared.highscoreCodec newModel.highscores
+                            }
+                        )
+
+                    Nothing ->
+                        ( model
+                        , HSL.respond
+                            { requestId = req.requestId
+                            , status = 500
+                            , headers = [ ( "Content-Type", "text/plain" ) ]
+                            , body = req.body
+                            }
+                        )
 
         NoOp ->
             ( model, Cmd.none )

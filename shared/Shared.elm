@@ -1,4 +1,4 @@
-module MainLogic exposing (FrontendMsg(..), Model, addHighscore, frontendMsgCodec, highscoreCodec)
+module Shared exposing (FrontendMsg(..), Model, addHighscore, frontendMsgCodec, highscoreCodec)
 
 import Codec.Bytes exposing (Codec)
 
